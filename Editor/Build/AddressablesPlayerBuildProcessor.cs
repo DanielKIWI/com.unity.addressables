@@ -1,4 +1,5 @@
 ﻿using System.IO;
+using System.Linq;
 using UnityEditor;
 using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
@@ -15,6 +16,21 @@ public class AddressablesPlayerBuildProcessor : IPreprocessBuildWithReport, IPos
     public void OnPostprocessBuild(BuildReport report)
     {
         CleanTemporaryPlayerBuildData();
+        var addressableTargetDir = GetFinalBuildAddressableDirectory(report.summary);
+        if (addressableTargetDir != null)
+        {
+            addressableTargetDir += "/" + Addressables.StreamingAssetsSubFolder + "/" + PlatformMappingService.GetPlatform();
+            if (Directory.Exists(addressableTargetDir))
+            {
+                Debug.Log(string.Format("Deleting Addressables data from {0}.", addressableTargetDir));
+                Directory.Delete(addressableTargetDir, true);
+            }
+            Debug.Log(string.Format(
+                "Copying Addressables data from {0} to {1}.  Bypassing Editor StreamingAssets.",
+                Addressables.BuildPath, addressableTargetDir));
+
+            DirectoryUtility.DirectoryCopy(Addressables.BuildPath, addressableTargetDir, true);
+        }
     }
     
     [InitializeOnLoadMethod]
@@ -32,6 +48,9 @@ public class AddressablesPlayerBuildProcessor : IPreprocessBuildWithReport, IPos
 
     public void OnPreprocessBuild(BuildReport report)
     {
+        if (GetFinalBuildAddressableDirectory(report.summary) != null)
+            return;
+
         if (Directory.Exists(Addressables.BuildPath))
         {
             Debug.Log(string.Format(
@@ -39,6 +58,28 @@ public class AddressablesPlayerBuildProcessor : IPreprocessBuildWithReport, IPos
                 Addressables.BuildPath, Addressables.PlayerBuildDataPath));
 
             DirectoryUtility.DirectoryCopy(Addressables.BuildPath, Addressables.PlayerBuildDataPath, true);
+        }
+    }
+    
+    private string GetFinalBuildAddressableDirectory(BuildSummary buildSummary)
+    {
+        switch (buildSummary.platform)
+        {
+            case BuildTarget.StandaloneWindows:
+            case BuildTarget.StandaloneWindows64:
+                return Path.Combine(buildSummary.outputPath, Application.productName + "_Data", "StreamingAssets");
+            case BuildTarget.XboxOne:
+                if (EditorUserBuildSettings.xboxOneDeployMethod != XboxOneDeployMethod.Push && EditorUserBuildSettings.xboxOneDeployMethod != XboxOneDeployMethod.RunFromPC)
+                    return null;
+                return Path.Combine(buildSummary.outputPath, Application.productName, "Data", "StreamingAssets");
+            case BuildTarget.PS4:
+#if UNITY_PS4
+                if (EditorUserBuildSettings.ps4BuildSubtarget != PS4BuildSubtarget.PCHosted)
+                    return null;
+#endif
+                return Path.Combine(buildSummary.outputPath, "Media", "StreamingAssets");
+            default:
+                return null;
         }
     }
 }
