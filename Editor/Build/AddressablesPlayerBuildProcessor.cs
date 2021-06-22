@@ -50,6 +50,8 @@ public class AddressablesPlayerBuildProcessor : IPreprocessBuildWithReport, IPos
     {
         if (GetFinalBuildAddressableDirectory(report.summary) != null)
             return;
+        if (ManuallyCopiedAddressablesToStreamingAssets)
+            return;
 
         if (Directory.Exists(Addressables.BuildPath))
         {
@@ -81,5 +83,45 @@ public class AddressablesPlayerBuildProcessor : IPreprocessBuildWithReport, IPos
             default:
                 return null;
         }
+    }
+
+
+    public const string kMenuText = "Assets/Manually copied Addressables to StreamingAssets";
+
+    private static bool ManuallyCopiedAddressablesToStreamingAssets
+    {
+        get => EditorPrefs.GetBool(kMenuText, false);
+        set => EditorPrefs.SetBool(kMenuText, value);
+    }
+
+    /// <summary>
+    /// Raises the initialize on load method event.
+    /// </summary>
+    [InitializeOnLoadMethod]
+    static void OnInitializeOnLoadMethod()
+    {
+        EditorApplication.delayCall += () => Valid();
+    }
+
+    /// <summary>
+    /// Toggles the menu.
+    /// </summary>
+    [MenuItem(kMenuText)]
+    static void OnClickMenu()
+    {
+        // Check/Uncheck menu.
+        bool isChecked = !Menu.GetChecked(kMenuText);
+        Menu.SetChecked(kMenuText, isChecked);
+
+        // Save to EditorPrefs.
+        ManuallyCopiedAddressablesToStreamingAssets = isChecked;
+    }
+
+    [MenuItem(kMenuText, true)]
+    static bool Valid()
+    {
+        // Check/Uncheck menu from EditorPrefs.
+        Menu.SetChecked(kMenuText, ManuallyCopiedAddressablesToStreamingAssets);
+        return true;
     }
 }
