@@ -67,7 +67,7 @@ public class AddressablesPlayerBuildProcessor : IPreprocessBuildWithReport, IPos
         {
             case BuildTarget.StandaloneWindows:
             case BuildTarget.StandaloneWindows64:
-                return Path.Combine(buildSummary.outputPath, Application.productName + "_Data", "StreamingAssets");
+                return Path.Combine(Path.GetDirectoryName(buildSummary.outputPath), Application.productName + "_Data", "StreamingAssets");
             case BuildTarget.XboxOne:
                 if (EditorUserBuildSettings.xboxOneDeployMethod != XboxOneDeployMethod.Push && EditorUserBuildSettings.xboxOneDeployMethod != XboxOneDeployMethod.RunFromPC)
                     return null;
