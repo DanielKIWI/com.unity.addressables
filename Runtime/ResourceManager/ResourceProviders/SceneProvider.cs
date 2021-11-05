@@ -102,7 +102,7 @@ namespace UnityEngine.ResourceManagement.ResourceProviders
             {
                 get
                 {
-                    return (m_Inst.m_Operation.progress + m_DepOp.PercentComplete) / 2;
+                    return ((m_Inst.m_Operation != null ? m_Inst.m_Operation.progress : 0f) + m_DepOp.PercentComplete) / 2;
                 }
             }
 
