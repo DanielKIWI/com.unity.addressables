@@ -29,7 +29,7 @@ public class AddressablesPlayerBuildProcessor : IPreprocessBuildWithReport, IPos
         var addressableTargetDir = GetFinalBuildAddressableDirectory(report.summary);
         if (addressableTargetDir != null)
         {
-            addressableTargetDir += "/" + Addressables.StreamingAssetsSubFolder + "/" + PlatformMappingService.GetPlatform();
+            addressableTargetDir += "/" + Addressables.StreamingAssetsSubFolder;// + "/" + PlatformMappingService.GetPlatform();
             if (Directory.Exists(addressableTargetDir))
             {
                 Debug.Log(string.Format("Deleting Addressables data from {0}.", addressableTargetDir));
