@@ -1,5 +1,6 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEditor.AddressableAssets.HostingServices;
 using UnityEditor.AddressableAssets.Settings;
 using UnityEditor.IMGUI.Controls;
@@ -58,6 +59,12 @@ namespace UnityEditor.AddressableAssets.GUI
         readonly Dictionary<object, HostingServicesProfileVarsTreeView> m_ProfileVarTables =
             new Dictionary<object, HostingServicesProfileVarsTreeView>();
 
+        readonly Dictionary<object, Dictionary<string, string>> m_TablePrevData =
+            new Dictionary<object, Dictionary<string, string>>();
+
+        private readonly Dictionary<object, Dictionary<string, string>> m_TablePrevManagerVariables =
+            new Dictionary<object, Dictionary<string, string>>();
+        
         readonly List<IHostingService> m_RemovalQueue = new List<IHostingService>();
         HostingServicesProfileVarsTreeView m_GlobalProfileVarTable;
         HostingServicesListTreeView m_ServicesList;
@@ -87,16 +94,19 @@ namespace UnityEditor.AddressableAssets.GUI
 
         void Initialize(AddressableAssetSettings settings)
         {
+            if (m_Logger == null)
+                m_Logger = new Logger(this);
+
             if (m_Settings == null)
                 m_Settings = settings;
 
-            m_Settings.HostingServicesManager.Logger = m_Logger;
+            if (m_Settings != null)
+                m_Settings.HostingServicesManager.Logger = m_Logger;
         }
 
         void OnEnable()
         {
             PopulateServiceTypes();
-
             m_ItemRectPadding = new GUIStyle();
             m_ItemRectPadding.padding = new RectOffset(k_ItemRectPadding, k_ItemRectPadding, k_ItemRectPadding, k_ItemRectPadding);
             m_LogRectPadding = new GUIStyle();
@@ -130,7 +140,8 @@ namespace UnityEditor.AddressableAssets.GUI
         void Awake()
         {
             titleContent = new GUIContent("Addressables Hosting");
-            m_Logger = new Logger(this);
+
+            Initialize(m_Settings);
         }
 
         internal static void DrawOutline(Rect rect, float size)
@@ -158,12 +169,18 @@ namespace UnityEditor.AddressableAssets.GUI
 
         void OnGUI()
         {
-            if (m_Settings == null) return;
+            if (m_Settings == null)
+            {
+                if (AddressableAssetSettingsDefaultObject.Settings == null)
+                    return;
+                InitializeWithDefaultSettings();
+            }
+                
 
             if (m_IsResizingVerticalSplitter)
                 m_VerticalSplitterRatio = Mathf.Clamp(Event.current.mousePosition.y / position.height, 0.2f, 0.9f);
 
-            if(m_IsResizingHorizontalSplitter)
+            if (m_IsResizingHorizontalSplitter)
                 m_HorizontalSplitterRatio = Mathf.Clamp(Event.current.mousePosition.x / position.width, 0.15f, 0.6f);
 
             var toolbarRect = new Rect(0, 0, position.width, position.height);
@@ -180,7 +197,7 @@ namespace UnityEditor.AddressableAssets.GUI
             EditorGUIUtility.AddCursorRect(horizontalSplitterRect, MouseCursor.ResizeHorizontal);
             if (Event.current.type == EventType.MouseDown && verticalSplitterRect.Contains(Event.current.mousePosition))
                 m_IsResizingVerticalSplitter = true;
-            else if(Event.current.type == EventType.MouseDown && horizontalSplitterRect.Contains(Event.current.mousePosition))
+            else if (Event.current.type == EventType.MouseDown && horizontalSplitterRect.Contains(Event.current.mousePosition))
                 m_IsResizingHorizontalSplitter = true;
             else if (Event.current.type == EventType.MouseUp)
             {
@@ -205,9 +222,8 @@ namespace UnityEditor.AddressableAssets.GUI
             GUILayout.EndHorizontal();
             GUILayout.EndArea();
 
-
             DrawOutline(servicesRect, 1);
-           
+
             GUILayout.BeginArea(servicesRect);
             {
                 Rect r = new Rect(servicesRect);
@@ -256,11 +272,11 @@ namespace UnityEditor.AddressableAssets.GUI
                 return;
             }
 
-            if(m_ServicesList == null || m_ServicesList.Names.Count != svcList.Count || m_Reload)
+            if (m_ServicesList == null || m_ServicesList.Names.Count != svcList.Count || m_Reload)
             {
                 m_ServicesList = new HostingServicesListTreeView(new TreeViewState(), manager, this, HostingServicesListTreeView.CreateHeader());
 
-                if(m_Reload)
+                if (m_Reload)
                     m_Reload = false;
             }
             m_ServicesList.OnGUI(rect);
@@ -273,14 +289,14 @@ namespace UnityEditor.AddressableAssets.GUI
             var svcList = manager.HostingServices;
 
             List<IHostingService> lst = new List<IHostingService>(svcList);
-            if(lst.Count == 0)
+            if (lst.Count == 0)
             {
                 EditorGUILayout.Space();
                 EditorGUILayout.LabelField("No Hosting Services configured.");
                 GUILayout.EndScrollView();
                 return;
             }
-            else if(m_serviceIndex >= lst.Count)
+            else if (m_serviceIndex >= lst.Count)
             {
                 m_serviceIndex = lst.Count - 1;
             }
@@ -290,9 +306,9 @@ namespace UnityEditor.AddressableAssets.GUI
         }
 
         /// <summary>
-        /// Add a hosting service of a given type.  The service at index <paramref name="typeIndex"/> in ServiceTypes must implement the
-        /// <see cref="IHostingService"/> interface, or an <see cref="ArgumentException"/> is thrown.
-        /// <param name="typeIndex">The index of the service stored in ServiceTypes. The service this this index must implement <see cref="IHostingService"/></param>
+        /// Add a new hosting service to the HostingServicesManager. The service at index <paramref name="typeIndex"/> in ServiceTypes must implement the <see cref="IHostingService"/> interface, or an <see cref="ArgumentException"/> is thrown.
+        /// </summary>
+        /// <param name="typeIndex">The index of the service stored in ServiceTypes. The service at this index must implement <see cref="IHostingService"/></param>
         /// <param name="serviceName">A descriptive name for the new service instance.</param>
         public void AddService(int typeIndex, string serviceName)
         {
@@ -302,11 +318,12 @@ namespace UnityEditor.AddressableAssets.GUI
 
         /// <summary>
         /// Add a hosting service to the removal queue.
+        /// </summary>
         /// <param name="svc">The service type to be removed.</param>
         /// <param name="showDialog">Indicates whether or not a warning dialogue box is shown.</param>
         public void RemoveService(IHostingService svc, bool showDialog = true)
         {
-            if(!showDialog)
+            if (!showDialog)
                 m_RemovalQueue.Add(svc);
             else if (EditorUtility.DisplayDialog("Remove Service", "Are you sure you want to remove " + svc.DescriptiveName + "? This action cannot be undone.", "Ok", "Cancel"))
                 m_RemovalQueue.Add(svc);
@@ -314,11 +331,13 @@ namespace UnityEditor.AddressableAssets.GUI
 
         void DrawServiceElement(IHostingService svc, List<IHostingService> svcList)
         {
-            string newName =  EditorGUILayout.DelayedTextField("Service Name", svc.DescriptiveName);
-            if(svcList.Find(s => s.DescriptiveName == newName) == default(IHostingService))
+            bool isDirty = false;
+            string newName = EditorGUILayout.DelayedTextField("Service Name", svc.DescriptiveName);
+            if (svcList.Find(s => s.DescriptiveName == newName) == default(IHostingService))
             {
                 svc.DescriptiveName = newName;
                 m_ServicesList.Reload();
+                isDirty = true;
             }
 
             var typeAndId = string.Format("{0} ({1})", svc.GetType().Name, svc.InstanceId.ToString());
@@ -334,13 +353,13 @@ namespace UnityEditor.AddressableAssets.GUI
                     svc.StartHostingService();
                 else
                     svc.StopHostingService();
+                isDirty = true;
             }
 
             EditorGUILayout.Space();
 
             using (new EditorGUI.DisabledScope(!svc.IsHostingServiceRunning))
             {
-
                 GUILayout.BeginHorizontal();
                 EditorGUILayout.LabelField("Hosting Service Variables");
 
@@ -350,8 +369,11 @@ namespace UnityEditor.AddressableAssets.GUI
 
                 GUILayout.EndHorizontal();
 
-                DrawProfileVarTable(svc, svc.ProfileVariables);
+                DrawProfileVarTable(svc);
             }
+
+            if (isDirty && m_Settings != null)
+                m_Settings.SetDirty(AddressableAssetSettings.ModificationEvent.HostingServicesManagerModified, this, false, true);
         }
 
         void DrawLogArea(Rect rect)
@@ -368,34 +390,47 @@ namespace UnityEditor.AddressableAssets.GUI
             EditorGUILayout.EndScrollView();
         }
 
-        void DrawProfileVarTable(object tableKey, IEnumerable<KeyValuePair<string, string>> data)
+        internal static bool DictsAreEqual(Dictionary<string, string> a, Dictionary<string, string> b)
         {
+            return a.Count == b.Count && !a.Except(b).Any();
+        }
+
+        void DrawProfileVarTable(IHostingService tableKey)
+        {
+            var manager = m_Settings.HostingServicesManager;
+            var data = tableKey.ProfileVariables;
+            
             HostingServicesProfileVarsTreeView table;
+            
             if (!m_ProfileVarTables.TryGetValue(tableKey, out table))
             {
                 table = new HostingServicesProfileVarsTreeView(new TreeViewState(),
                     HostingServicesProfileVarsTreeView.CreateHeader());
                 m_ProfileVarTables[tableKey] = table;
+                m_TablePrevData[tableKey] = new Dictionary<string, string>(data);
+                m_TablePrevManagerVariables[tableKey] = new Dictionary<string, string>(manager.GlobalProfileVariables);
+            }
+            
+            else if (!DictsAreEqual(data, m_TablePrevData[tableKey]) || !DictsAreEqual(manager.GlobalProfileVariables, m_TablePrevManagerVariables[tableKey]))
+            {
+                table.ClearItems();
+                m_TablePrevData[tableKey] = new Dictionary<string, string>(data);
+                m_TablePrevManagerVariables[tableKey] = new Dictionary<string, string>(manager.GlobalProfileVariables);
             }
 
+            if (table.Count == 0)
+            {
+                foreach (var globalVar in manager.GlobalProfileVariables)
+                    table.AddOrUpdateItem(globalVar.Key, globalVar.Value);
+                
+                foreach (var kvp in data)
+                    table.AddOrUpdateItem(kvp.Key, kvp.Value);
+            }
+            
             var rowHeight = table.RowHeight;
-            var tableHeight = table.multiColumnHeader.height + rowHeight; // header + 1 extra line
-
-            table.ClearItems();
-
-            var manager = m_Settings.HostingServicesManager;
-            foreach (var globalVar in manager.GlobalProfileVariables)
-            {
-                table.AddOrUpdateItem(globalVar.Key, globalVar.Value);
-                tableHeight += rowHeight;
-            }
-            foreach (var kvp in data)
-            {
-                table.AddOrUpdateItem(kvp.Key, kvp.Value);
-                tableHeight += rowHeight;
-            }
-
-            table.OnGUI(EditorGUILayout.GetControlRect(false, tableHeight));
+            var tableHeight = table.multiColumnHeader.height + rowHeight + (rowHeight * (data.Count() + manager.GlobalProfileVariables.Count)); // header + 1 extra line
+        
+            table.OnGUI(EditorGUILayout.GetControlRect(false, tableHeight)); 
         }
 
         /// <inheritdoc/>
@@ -430,8 +465,7 @@ namespace UnityEditor.AddressableAssets.GUI
         /// <inheritdoc/>
         public void OnAfterDeserialize()
         {
-            m_Logger = new Logger(this);
-            Initialize(m_Settings);
+            // No implementation
         }
     }
 }

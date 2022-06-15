@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Reflection;
 
@@ -9,17 +9,23 @@ namespace UnityEngine.AddressableAssets.Initialization
     /// </summary>
     public static class AddressablesRuntimeProperties
     {
+        // cache these to avoid GC allocations
+        static Stack<string> s_TokenStack = new Stack<string>(32);
+        static Stack<int> s_TokenStartStack = new Stack<int>(32);
+        
 #if !UNITY_EDITOR && UNITY_WSA_10_0 && ENABLE_DOTNET
         static Assembly[] GetAssemblies()
         {
             //Not supported on UWP platforms
             return new Assembly[0];
         }
+
 #else
         static Assembly[] GetAssemblies()
         {
             return AppDomain.CurrentDomain.GetAssemblies();
         }
+
 #endif
 
         static Dictionary<string, string> s_CachedValues = new Dictionary<string, string>();
@@ -41,7 +47,7 @@ namespace UnityEngine.AddressableAssets.Initialization
 
         /// <summary>
         /// This will clear all PropertyValues that have been cached.  This includes all values set by
-        /// <see cref="SetPropertyValue"/> as well as any reflection-evaluated properties.  
+        /// <see cref="SetPropertyValue"/> as well as any reflection-evaluated properties.
         /// </summary>
         public static void ClearCachedPropertyValues()
         {
@@ -128,21 +134,62 @@ namespace UnityEngine.AddressableAssets.Initialization
         {
             if (string.IsNullOrEmpty(inputString))
                 return string.Empty;
+            
+            s_TokenStack.Push(inputString);
+            int popTokenAt = inputString.Length;
+            char[] delimiters = {startDelimiter, endDelimiter};
+            bool delimitersMatch = startDelimiter == endDelimiter;
 
-            while (true)
+            int i = inputString.IndexOf(startDelimiter);
+            while (i >= 0)
             {
-                int i = inputString.IndexOf(startDelimiter);
-                if (i < 0)
-                    return inputString;
-                int e = inputString.IndexOf(endDelimiter, i+1);
-                if (e < i)
-                    return inputString;
-                var token = inputString.Substring(i + 1, e - i - 1);
-                var tokenVal = varFunc == null ? string.Empty : varFunc(token);
-                inputString = inputString.Substring(0, i) + tokenVal + inputString.Substring(e + 1);
+                char c = inputString[i];
+                if (c == startDelimiter && (!delimitersMatch || s_TokenStartStack.Count == 0))
+                {
+                    s_TokenStartStack.Push(i);
+                    i++;
+                }
+                else if (c == endDelimiter && s_TokenStartStack.Count > 0)
+                {
+                    int start = s_TokenStartStack.Peek();
+                    string token = inputString.Substring(start + 1, i - start - 1);
+                    string tokenVal;
+
+                    if (popTokenAt <= i)
+                    {
+                        s_TokenStack.Pop();
+                    }
+                    
+                    // check if the token is already included
+                    if (s_TokenStack.Contains(token))
+                        tokenVal = "#ERROR-CyclicToken#";
+                    else
+                    {
+                        tokenVal = varFunc == null ? string.Empty : varFunc(token);
+                        s_TokenStack.Push(token);
+                    }
+        
+                    i = s_TokenStartStack.Pop();
+                    popTokenAt = i + tokenVal.Length + 1;
+        
+                    if (i > 0)
+                    {
+                        int rhsStartIndex = i + token.Length + 2;
+                        if (rhsStartIndex == inputString.Length)
+                            inputString = inputString.Substring(0, i) + tokenVal;
+                        else
+                            inputString = inputString.Substring(0, i) + tokenVal + inputString.Substring(rhsStartIndex);
+                    }
+                    else
+                        inputString = tokenVal + inputString.Substring(i + token.Length + 2);
+                }
+                
+                i = inputString.IndexOfAny(delimiters, i);
             }
+
+            s_TokenStack.Clear();
+            s_TokenStartStack.Clear();
+            return inputString;
         }
-
-
     }
 }

@@ -17,7 +17,7 @@ namespace UnityEngine.ResourceManagement.ResourceLocations
         Type m_Type;
         List<IResourceLocation> m_Dependencies;
         string m_PrimaryKey;
-        
+
         /// <summary>
         /// Internal id.
         /// </summary>
@@ -67,12 +67,12 @@ namespace UnityEngine.ResourceManagement.ResourceLocations
         }
 
         /// <summary>
-        /// Returns the name of the location. This is usally set to the primary key of the location, or its "address".
+        /// Returns the Internal name used by the provider to load this location
         /// </summary>
         /// <returns></returns>
         public override string ToString()
         {
-            return m_Name;
+            return m_Id;
         }
 
         /// <summary>
@@ -81,6 +81,7 @@ namespace UnityEngine.ResourceManagement.ResourceLocations
         /// <param name="name">The name of the location.  This is usually set to the primary key, or "address" of the location.</param>
         /// <param name="id">The internal id of the location.  This is used by the IResourceProvider to identify the object to provide.  For example this may contain the file path or url of an asset.</param>
         /// <param name="providerId">The provider id.  This is set to the FullName of the type of the provder class.</param>
+        /// <param name="t">The type of the object to provide.</param>
         /// <param name="dependencies">Locations for the dependencies of this location.</param>
         public ResourceLocationBase(string name, string id, string providerId, Type t, params IResourceLocation[] dependencies)
         {
@@ -94,9 +95,10 @@ namespace UnityEngine.ResourceManagement.ResourceLocations
             m_Id = id;
             m_ProviderId = providerId;
             m_Dependencies = new List<IResourceLocation>(dependencies);
-            m_Type = t;
+            m_Type = t == null ? typeof(object) : t;
             ComputeDependencyHash();
         }
+
         /// <summary>
         /// Compute the dependency hash for this location
         /// </summary>
@@ -108,4 +110,32 @@ namespace UnityEngine.ResourceManagement.ResourceLocations
         }
     }
 
+    internal class LocationWrapper : IResourceLocation
+    {
+        IResourceLocation m_InternalLocation;
+        public LocationWrapper(IResourceLocation location)
+        {
+            m_InternalLocation = location;
+        }
+        public string InternalId => m_InternalLocation.InternalId;
+
+        public string ProviderId => m_InternalLocation.ProviderId;
+
+        public IList<IResourceLocation> Dependencies => m_InternalLocation.Dependencies;
+
+        public int DependencyHashCode => m_InternalLocation.DependencyHashCode;
+
+        public bool HasDependencies => m_InternalLocation.HasDependencies;
+
+        public object Data => m_InternalLocation.Data;
+
+        public string PrimaryKey => m_InternalLocation.PrimaryKey;
+
+        public Type ResourceType => m_InternalLocation.ResourceType;
+
+        public int Hash(Type resultType)
+        {
+            return m_InternalLocation.Hash(resultType);
+        }
+    }
 }

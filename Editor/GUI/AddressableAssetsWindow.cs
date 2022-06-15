@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEditor.AddressableAssets.Settings;
 using UnityEditor.PackageManager;
 using UnityEditor.PackageManager.Requests;
@@ -13,11 +14,7 @@ namespace UnityEditor.AddressableAssets.GUI
 
         [FormerlySerializedAs("m_groupEditor")]
         [SerializeField]
-        AddressableAssetsSettingsGroupEditor m_GroupEditor;
-
-        [FormerlySerializedAs("m_ignoreLegacyBundles")]
-        [SerializeField]
-        bool m_IgnoreLegacyBundles;
+        internal AddressableAssetsSettingsGroupEditor m_GroupEditor;
 
         [MenuItem("Window/Asset Management/Addressables/Settings", priority = 2051)]
         internal static void ShowSettingsInspector()
@@ -25,10 +22,11 @@ namespace UnityEditor.AddressableAssets.GUI
             var setting = AddressableAssetSettingsDefaultObject.Settings;
             if (setting == null)
             {
-                Debug.LogWarning("Attempting to inspect default Addressables Settings, but no settings file exists.  Open 'Window/Asset Management/Addressables/Groups' for more info.");   
+                Debug.LogWarning("Attempting to inspect default Addressables Settings, but no settings file exists.  Open 'Window/Asset Management/Addressables/Groups' for more info.");
             }
             else
             {
+                EditorApplication.ExecuteMenuItem("Window/General/Inspector");
                 EditorGUIUtility.PingObject(setting);
                 Selection.activeObject = AddressableAssetSettingsDefaultObject.Settings;
             }
@@ -41,23 +39,23 @@ namespace UnityEditor.AddressableAssets.GUI
             window.titleContent = new GUIContent("Addressables Groups");
             window.Show();
         }
+
         public static Vector2 GetWindowPosition()
         {
             var window = GetWindow<AddressableAssetsWindow>();
             return new Vector2(window.position.x, window.position.y);
         }
 
+        internal void SelectAssetsInGroupEditor(IList<AddressableAssetEntry> entries)
+        {
+            if (m_GroupEditor == null)
+                m_GroupEditor = new AddressableAssetsSettingsGroupEditor(this);
+            m_GroupEditor.SelectEntries(entries);
+        }
+
         public void OnEnable()
         {
-            if (!m_IgnoreLegacyBundles)
-            {
-                var bundleList = AssetDatabase.GetAllAssetBundleNames();
-                if (bundleList != null && bundleList.Length > 0)
-                    OfferToConvert();
-            }
-            if (m_GroupEditor != null)
-                m_GroupEditor.OnEnable();
-            
+            m_GroupEditor?.OnEnable();
             if (m_Request == null || m_Request.Status == StatusCode.Failure)
             {
                 m_Request = PackageManager.Client.Search("com.unity.addressables");
@@ -66,19 +64,24 @@ namespace UnityEditor.AddressableAssets.GUI
 
         public void OnDisable()
         {
-            if (m_GroupEditor != null)
-                m_GroupEditor.OnDisable();
+            m_GroupEditor?.OnDisable();
         }
 
-        internal void OfferToConvert()
+        internal void OfferToConvert(AddressableAssetSettings settings)
         {
             var bundleList = AssetDatabase.GetAllAssetBundleNames();
-            if (EditorUtility.DisplayDialog("Legacy Bundles Detected", "We have detected the use of legacy bundles in this project.  Would you like to auto-convert those into Addressables? \nThis will take each asset bundle you have defined (we have detected " + bundleList.Length + " bundles), create an Addressables group with a matching name, then move all assets from those bundles into corresponding groups.  This will remove the asset bundle assignment from all assets, and remove all asset bundle definitions from this project.  This cannot be undone.", "Convert", "Ignore"))
+            if (settings != null && bundleList.Length > 0)
             {
-                AddressableAssetUtility.ConvertAssetBundlesToAddressables();
+                var displayChoice = EditorUtility.DisplayDialog("Legacy Bundles Detected",
+                    "We have detected the use of legacy bundles in this project.  Would you like to auto-convert those into Addressables? \nThis will take each asset bundle you have defined (we have detected " +
+                    bundleList.Length +
+                    " bundles), create an Addressables group with a matching name, then move all assets from those bundles into corresponding groups.  This will remove the asset bundle assignment from all assets, and remove all asset bundle definitions from this project.  This cannot be undone.",
+                    "Convert", "Ignore");
+                if (displayChoice)
+                {
+                    AddressableAssetUtility.ConvertAssetBundlesToAddressables();
+                }
             }
-            else
-                m_IgnoreLegacyBundles = true;
         }
 
         public void OnGUI()
@@ -90,6 +93,7 @@ namespace UnityEditor.AddressableAssets.GUI
                 {
                     m_GroupEditor = null;
                     AddressableAssetSettingsDefaultObject.Settings = AddressableAssetSettings.Create(AddressableAssetSettingsDefaultObject.kDefaultConfigFolder, AddressableAssetSettingsDefaultObject.kDefaultConfigAssetName, true, true);
+                    OfferToConvert(AddressableAssetSettingsDefaultObject.Settings);
                 }
                 //if (GUILayout.Button("Import Addressables Settings"))
                 //{
@@ -150,10 +154,8 @@ namespace UnityEditor.AddressableAssets.GUI
                 Rect contentRect = new Rect(0, 0, position.width, position.height);
 
                 if (m_GroupEditor == null)
-                {
                     m_GroupEditor = new AddressableAssetsSettingsGroupEditor(this);
-                    m_GroupEditor.OnEnable();
-                }
+
                 if (m_GroupEditor.OnGUI(contentRect))
                     Repaint();
             }

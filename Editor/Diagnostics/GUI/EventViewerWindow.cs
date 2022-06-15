@@ -19,7 +19,6 @@ namespace UnityEditor.AddressableAssets.Diagnostics.GUI
         GUIContent m_NextFrameIcon;
         int m_PlayerSessionIndex;
         int m_InspectFrame;
-        bool m_Record = true;
         int m_EventListFrame = -1;
         VerticalSplitter m_VerticalSplitter = new VerticalSplitter();
         HorizontalSplitter m_HorizontalSplitter = new HorizontalSplitter();
@@ -35,14 +34,17 @@ namespace UnityEditor.AddressableAssets.Diagnostics.GUI
         MultiColumnHeaderState m_GraphListMchs;
         EventGraphListView m_GraphList;
 
-        EventDataPlayerSession activeSession { get { return m_EventData == null ? null : m_EventData.GetSessionByIndex(m_PlayerSessionIndex); } }
+        EventDataPlayerSession activeSession
+        {
+            get { return m_EventData == null ? null : m_EventData.GetSessionByIndex(m_PlayerSessionIndex); }
+        }
         protected virtual bool ShowEventDetailPanel { get { return false; } }
         protected virtual bool ShowEventPanel { get { return false; } }
 
         void OnEnable()
         {
             EditorConnection.instance.Initialize();
-            EditorConnection.instance.Register(DiagnosticEventCollector.PlayerConnectionGuid, OnPlayerConnectionMessage);
+            EditorConnection.instance.Register(DiagnosticEventCollectorSingleton.PlayerConnectionGuid, OnPlayerConnectionMessage);
             EditorConnection.instance.RegisterConnection(OnPlayerConnection);
             EditorConnection.instance.RegisterDisconnection(OnPlayerDisconnection);
 
@@ -50,15 +52,19 @@ namespace UnityEditor.AddressableAssets.Diagnostics.GUI
             m_PrevFrameIcon = EditorGUIUtility.IconContent("Profiler.PrevFrame", "|Go one frame backwards");
             m_NextFrameIcon = EditorGUIUtility.IconContent("Profiler.NextFrame", "|Go one frame forwards");
             EditorApplication.playModeStateChanged += OnEditorPlayModeChanged;
-            RegisterEventHandler(true);
+
             if (m_EventData == null)
+            {
+                RegisterEventHandler(true);
                 m_EventData = new EventDataPlayerSessionCollection(OnRecordEvent);
-            m_EventData.GetPlayerSession(0, true).IsActive = true;
+                m_EventData.GetPlayerSession(0, true).IsActive = true;
+            }
+            
         }
 
         void OnDisable()
         {
-            EditorConnection.instance.Unregister(DiagnosticEventCollector.PlayerConnectionGuid, OnPlayerConnectionMessage);
+            EditorConnection.instance.Unregister(DiagnosticEventCollectorSingleton.PlayerConnectionGuid, OnPlayerConnectionMessage);
             RegisterEventHandler(false);
             EditorApplication.playModeStateChanged -= OnEditorPlayModeChanged;
         }
@@ -68,15 +74,16 @@ namespace UnityEditor.AddressableAssets.Diagnostics.GUI
             if (m_EventData == null)
                 m_EventData = new EventDataPlayerSessionCollection(OnRecordEvent);
             m_EventData.GetPlayerSession(id, true).IsActive = true;
+            int connectedSessionIndex = m_EventData.GetSessionIndexById(id);
+            m_PlayerSessionIndex = connectedSessionIndex != -1 ? connectedSessionIndex : 0;
         }
 
         void OnPlayerDisconnection(int id)
         {
             if (m_EventData == null)
                 return;
-            var playerSession = m_EventData.GetPlayerSession(id, false);
-            if (playerSession != null)
-                playerSession.IsActive = false;
+            m_EventData.RemoveSession(id);
+            m_PlayerSessionIndex = 0;
         }
 
         void OnPlayerConnectionMessage(MessageEventArgs args)
@@ -87,8 +94,8 @@ namespace UnityEditor.AddressableAssets.Diagnostics.GUI
 
         void RegisterEventHandler(bool reg)
         {
-            if(ProjectConfigData.postProfilerEvents)
-                DiagnosticEventCollector.RegisterEventHandler(OnEditorPlayModeEvent, reg, false);
+            if (ProjectConfigData.PostProfilerEvents)
+                DiagnosticEventCollectorSingleton.RegisterEventHandler(OnEditorPlayModeEvent, reg, true);
         }
 
         void OnEditorPlayModeEvent(DiagnosticEvent evt)
@@ -108,7 +115,6 @@ namespace UnityEditor.AddressableAssets.Diagnostics.GUI
             var entryCreated = m_EventData.ProcessEvent(diagnosticEvent, session);
             OnEventProcessed(diagnosticEvent, entryCreated);
         }
-
 
         public int Compare(EventDataSet x, EventDataSet y)
         {
@@ -137,7 +143,7 @@ namespace UnityEditor.AddressableAssets.Diagnostics.GUI
                 m_PlayerSessionIndex = 0;
                 RegisterEventHandler(true);
             }
-            else if (state == PlayModeStateChange.EnteredEditMode)
+            if (state == PlayModeStateChange.EnteredEditMode)
             {
                 RegisterEventHandler(false);
             }
@@ -150,18 +156,18 @@ namespace UnityEditor.AddressableAssets.Diagnostics.GUI
                 return true;
             foreach (var s in sel)
             {
-//                m_GraphList.Fi
+                //                m_GraphList.Fi
             }
-            
+
             return true;
         }
-
+        
         protected virtual bool OnRecordEvent(DiagnosticEvent diagnosticEvent)
         {
             return false;
         }
 
-        int m_lastRepaintedFrame = -1;
+        int m_LastRepaintedFrame = -1;
         void OnEventProcessed(DiagnosticEvent diagnosticEvent, bool entryCreated)
         {
             if (!CanHandleEvent(diagnosticEvent.Graph))
@@ -178,10 +184,10 @@ namespace UnityEditor.AddressableAssets.Diagnostics.GUI
             if (moveInspectFrame)
                 SetInspectFrame(m_LatestFrame);
 
-            if (diagnosticEvent.Frame != m_lastRepaintedFrame)
+            if (diagnosticEvent.Frame != m_LastRepaintedFrame)
             {
                 Repaint();
-                m_lastRepaintedFrame = diagnosticEvent.Frame;
+                m_LastRepaintedFrame = diagnosticEvent.Frame;
             }
         }
 
@@ -193,7 +199,7 @@ namespace UnityEditor.AddressableAssets.Diagnostics.GUI
             if (m_InspectFrame < 0)
                 m_InspectFrame = 0;
 
-            if(m_EventList != null)
+            if (m_EventList != null)
                 m_EventList.SetEvents(activeSession == null ? null : activeSession.GetFrameEvents(m_InspectFrame));
             m_LastEventListUpdate = Time.unscaledTime;
             m_EventListFrame = m_InspectFrame;
@@ -265,7 +271,14 @@ namespace UnityEditor.AddressableAssets.Diagnostics.GUI
 
         void OnInspectorUpdate()
         {
+            if (m_EventData == null) return;
             m_EventData.Update();
+            if (activeSession != null && activeSession.NeedsReload)
+            {
+                activeSession.NeedsReload = false;
+                m_EventList?.Reload();
+            }
+                
             Repaint();
         }
 
@@ -300,24 +313,17 @@ namespace UnityEditor.AddressableAssets.Diagnostics.GUI
         void DrawToolBar(EventDataPlayerSession session)
         {
             EditorGUILayout.BeginHorizontal(EditorStyles.toolbar);
-            GUILayout.FlexibleSpace();
-            m_Record = GUILayout.Toggle(m_Record, "Record", EditorStyles.toolbarButton, GUILayout.ExpandWidth(false));
 
-            if (GUILayout.Button("Clear", EditorStyles.toolbarButton))
+            if (GUILayout.Button("Clear Events", EditorStyles.toolbarButton))
             {
                 RegisterEventHandler(false);
                 session.Clear();
-                if (m_GraphList != null)
-                    m_GraphList.Reload();
+                m_GraphList?.Reload();
                 RegisterEventHandler(true);
             }
             
-            /*
-            if (GUILayout.Button("Load", EditorStyles.toolbarButton))
-                EditorUtility.DisplayDialog("Feature not implemented", "Saving and loading profile data is not yet supported", "Close");
-            if (GUILayout.Button("Save", EditorStyles.toolbarButton))
-                EditorUtility.DisplayDialog("Feature not implemented", "Saving and loading profile data is not yet supported", "Close");
-             */
+            if (m_GraphList != null && m_GraphList.HasHiddenEvents && GUILayout.Button("Unhide All Hidden Events", EditorStyles.toolbarButton)) 
+                m_GraphList.UnhideAllHiddenEvents();
 
             GUILayout.FlexibleSpace();
             GUILayout.Label(m_InspectFrame == m_LatestFrame ? "Frame:     " : "Frame: " + m_InspectFrame + "/" + m_LatestFrame, EditorStyles.miniLabel);
@@ -325,13 +331,11 @@ namespace UnityEditor.AddressableAssets.Diagnostics.GUI
             using (new EditorGUI.DisabledScope(m_InspectFrame <= 0))
                 if (GUILayout.Button(m_PrevFrameIcon, EditorStyles.toolbarButton))
                     SetInspectFrame(m_InspectFrame - 1);
-
-
+            
             using (new EditorGUI.DisabledScope(m_InspectFrame >= m_LatestFrame))
                 if (GUILayout.Button(m_NextFrameIcon, EditorStyles.toolbarButton))
                     SetInspectFrame(m_InspectFrame + 1);
-
-
+            
             if (GUILayout.Button("Current", EditorStyles.toolbarButton, GUILayout.ExpandWidth(false)))
                 SetInspectFrame(m_LatestFrame);
 
@@ -344,7 +348,7 @@ namespace UnityEditor.AddressableAssets.Diagnostics.GUI
                 return;
             columnNames.Add("Event"); columnSizes.Add(50);
             columnNames.Add("Id"); columnSizes.Add(200);
-    //        columnNames.Add("Data"); columnSizes.Add(400);
+            //        columnNames.Add("Data"); columnSizes.Add(400);
         }
 
         protected virtual bool OnDrawColumnCell(Rect cellRect, DiagnosticEvent diagnosticEvent, int column)
@@ -360,7 +364,7 @@ namespace UnityEditor.AddressableAssets.Diagnostics.GUI
                 {
                     case 0: EditorGUI.LabelField(cellRect, diagnosticEvent.Stream.ToString()); break;
                     case 1: EditorGUI.LabelField(cellRect, diagnosticEvent.DisplayName); break;
-//                    case 2: EditorGUI.LabelField(cellRect, diagnosticEvent. == null ? "null" : diagnosticEvent.Data.ToString()); break;
+                        //                    case 2: EditorGUI.LabelField(cellRect, diagnosticEvent. == null ? "null" : diagnosticEvent.Data.ToString()); break;
                 }
             }
         }
@@ -377,7 +381,7 @@ namespace UnityEditor.AddressableAssets.Diagnostics.GUI
                     MultiColumnHeaderState.OverwriteSerializedFields(m_GraphListMchs, headerState);
 
                 m_GraphListMchs = headerState;
-                m_GraphList = new EventGraphListView(()=> { return activeSession == null ? null : activeSession.RootStreamEntry; }, m_GraphListTreeViewState, m_GraphListMchs, CanHandleEvent, this);
+                m_GraphList = new EventGraphListView(() => { return activeSession == null ? null : activeSession.RootStreamEntry; }, m_GraphListTreeViewState, m_GraphListMchs, CanHandleEvent, this);
                 InitializeGraphView(m_GraphList);
                 m_GraphList.Reload();
             }
@@ -401,33 +405,31 @@ namespace UnityEditor.AddressableAssets.Diagnostics.GUI
 
             if (m_EventListFrame != m_InspectFrame && m_InspectFrame != m_LatestFrame && !m_DraggingInspectLine && Time.unscaledTime - m_LastEventListUpdate > .25f)
             {
-                if(activeSession != null)
+                if (activeSession != null)
                     m_EventList.SetEvents(activeSession.GetFrameEvents(m_InspectFrame));
                 m_LastEventListUpdate = Time.unscaledTime;
                 m_EventListFrame = m_InspectFrame;
             }
-            
+
             if (m_GraphListMchs != null && m_GraphListMchs.columns.Length > 2)
             {
                 string warningText = string.Empty;
-                if (!ProjectConfigData.postProfilerEvents)
-                    warningText = "Warning: Profile events must be enabled in your Addressable Asset settings to view profile data";
-                    m_GraphListMchs.columns[2].headerContent.text = warningText;
+                if (!ProjectConfigData.PostProfilerEvents)
+                    warningText = "Warning: 'Send Profiler events' must be enabled in your Addressable Asset settings to view profile data. Changes to 'Send Profiler Events' will be applied on the following build.";
+                m_GraphListMchs.columns[2].headerContent.text = warningText;
             }
         }
 
         void InitializeGraphView(EventGraphListView graphView)
         {
-            graphView.DefineGraph("EventCount", 0, new GraphLayerVertValueLine(0, "Events", "Event count per frame", Color.green));
             graphView.DefineGraph("FrameCount", 1, new GraphLayerBarChartMesh(1, "FPS", "Current Frame Rate", Color.blue),
-                                new GraphLayerLabel(1, "FPS", "Current Frame Rate", Color.white, GraphColors.LabelGraphLabelBackground, v => string.Format("{0} FPS", v)));
+                new GraphLayerLabel(1, "FPS", "Current Frame Rate", Color.white, GraphColors.LabelGraphLabelBackground, v => string.Format("{0} FPS", v)));
             graphView.DefineGraph("MemoryCount", 2, new GraphLayerBarChartMesh(2, "MonoHeap", "Current Mono Heap Size", Color.green * .75f),
-                                new GraphLayerLabel(2, "MonoHeap", "Current Mono Heap Size", Color.white, GraphColors.LabelGraphLabelBackground, v => string.Format("{0:0.0}MB", (v/1024f))));
-
+                new GraphLayerLabel(2, "MonoHeap", "Current Mono Heap Size", Color.white, GraphColors.LabelGraphLabelBackground, v => string.Format("{0:0.0}MB", (v / 1024f))));
             OnInitializeGraphView(graphView);
         }
 
-        protected virtual void OnInitializeGraphView(EventGraphListView graphView) { }
+        protected virtual void OnInitializeGraphView(EventGraphListView graphView) {}
     }
 
     [Serializable]

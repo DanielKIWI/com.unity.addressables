@@ -1,21 +1,31 @@
-﻿using System.IO;
-using System.Linq;
+using System.IO;
 using UnityEditor;
 using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
 
+/// <summary>
+/// Maintains Addresssables build data when processing a player build.
+/// </summary>
 public class AddressablesPlayerBuildProcessor : IPreprocessBuildWithReport, IPostprocessBuildWithReport
 {
+    /// <summary>
+    /// Returns the player build processor callback order.
+    /// </summary>
     public int callbackOrder
     {
         get { return 1; }
     }
 
+    /// <summary>
+    /// Restores temporary data created as part of a build.
+    /// </summary>
+    /// <param name="report">Stores temporary player build data.</param>
     public void OnPostprocessBuild(BuildReport report)
     {
         CleanTemporaryPlayerBuildData();
+
         var addressableTargetDir = GetFinalBuildAddressableDirectory(report.summary);
         if (addressableTargetDir != null)
         {
@@ -32,35 +42,48 @@ public class AddressablesPlayerBuildProcessor : IPreprocessBuildWithReport, IPos
             DirectoryUtility.DirectoryCopy(Addressables.BuildPath, addressableTargetDir, true);
         }
     }
-    
+
     [InitializeOnLoadMethod]
-    static void CleanTemporaryPlayerBuildData()
+    internal static void CleanTemporaryPlayerBuildData()
     {
-        string addressablesStreamingAssets = Path.Combine(Application.streamingAssetsPath, Addressables.StreamingAssetsSubFolder);
-        if (Directory.Exists(addressablesStreamingAssets))
+        if (Directory.Exists(Addressables.PlayerBuildDataPath))
         {
-            Debug.Log(string.Format("Deleting Addressables data from {0}.", addressablesStreamingAssets));
-            Directory.Delete(addressablesStreamingAssets, true);
-            //Will delete the directory only if it's empty
-            DirectoryUtility.DeleteDirectory(Application.streamingAssetsPath);
+            DirectoryUtility.DirectoryMove(Addressables.PlayerBuildDataPath, Addressables.BuildPath);
+            DirectoryUtility.DeleteDirectory(Application.streamingAssetsPath, onlyIfEmpty: true);
         }
     }
 
+    ///<summary>
+    /// Initializes temporary build data.
+    /// </summary>
+    /// <param name="report">Contains build data information.</param>
     public void OnPreprocessBuild(BuildReport report)
     {
         if (GetFinalBuildAddressableDirectory(report.summary) != null)
             return;
+        CopyTemporaryPlayerBuildData();
+    }
 
+    internal static void CopyTemporaryPlayerBuildData()
+    {
         if (Directory.Exists(Addressables.BuildPath))
         {
             Debug.Log(string.Format(
                 "Copying Addressables data from {0} to {1}.  These copies will be deleted at the end of the build.",
                 Addressables.BuildPath, Addressables.PlayerBuildDataPath));
+            if (Directory.Exists(Addressables.PlayerBuildDataPath))
+            {
+                Debug.LogWarning($"Found and deleting directory \"{Addressables.PlayerBuildDataPath}\", directory is managed through Addressables.");
+                DirectoryUtility.DeleteDirectory(Addressables.PlayerBuildDataPath, false);
+            }
 
-            DirectoryUtility.DirectoryCopy(Addressables.BuildPath, Addressables.PlayerBuildDataPath, true);
+            string parentDir = Path.GetDirectoryName(Addressables.PlayerBuildDataPath);
+            if (!string.IsNullOrEmpty(parentDir) && !Directory.Exists(parentDir))
+                Directory.CreateDirectory(parentDir);
+            Directory.Move(Addressables.BuildPath, Addressables.PlayerBuildDataPath );
         }
     }
-    
+
     private string GetFinalBuildAddressableDirectory(BuildSummary buildSummary)
     {
         switch (buildSummary.platform)

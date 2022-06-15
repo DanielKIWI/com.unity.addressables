@@ -69,18 +69,29 @@ namespace UnityEngine.ResourceManagement.ResourceProviders.Simulation
                 return m_RequestOperation != null ? m_RequestOperation.PercentComplete : 0.0f;
             }
 
+            DownloadStatus GetDownloadStatus()
+            {
+                return m_RequestOperation != null ? m_RequestOperation.GetDownloadStatus() : new DownloadStatus() { IsDone = GetPercentComplete() >= 1f };
+            }
+
             public void Start(ProvideHandle provideHandle, VirtualAssetBundleProvider provider)
             {
-                provideHandle.SetProgressCallback(GetPercentComplete);
                 m_Provider = provider;
                 m_PI = provideHandle;
-
+                m_PI.SetWaitForCompletionCallback(WaitForCompletionHandler);
                 m_RequestOperation = m_Provider.LoadAsync(m_PI.Location);
+                m_PI.SetProgressCallback(GetPercentComplete);
+                m_PI.SetDownloadProgressCallbacks(GetDownloadStatus);
                 m_RequestOperation.Completed += bundleOp =>
                 {
                     object result = (bundleOp.Result != null && m_PI.Type.IsAssignableFrom(bundleOp.Result.GetType())) ? bundleOp.Result : null;
                     m_PI.Complete(result, (result != null && bundleOp.OperationException == null), bundleOp.OperationException);
                 };
+            }
+
+            private bool WaitForCompletionHandler()
+            {
+                return m_RequestOperation.WaitForCompletion();
             }
         }
 
@@ -153,7 +164,7 @@ namespace UnityEngine.ResourceManagement.ResourceProviders.Simulation
             long remoteCount = 0;
             foreach (VirtualAssetBundle bundle in m_ActiveBundles.Values)
                 bundle.CountBandwidthUsage(ref localCount, ref remoteCount);
-            
+
             long localBw = localCount > 1 ? (m_BundleData.LocalLoadSpeed / localCount) : m_BundleData.LocalLoadSpeed;
             long remoteBw = remoteCount > 1 ? (m_BundleData.RemoteLoadSpeed / remoteCount) : m_BundleData.RemoteLoadSpeed;
             m_UpdatingActiveBundles = true;
@@ -177,7 +188,6 @@ namespace UnityEngine.ResourceManagement.ResourceProviders.Simulation
         {
             Update(unscaledDeltaTime);
         }
-
     }
 }
 #endif

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using NUnit.Framework;
 using UnityEngine;
@@ -13,19 +13,19 @@ namespace UnityEditor.AddressableAssets.Tests
         protected override void OnInit()
         {
             m_TestSchemaObject = ScriptableObject.CreateInstance<CustomTestSchema>();
-            AssetDatabase.CreateAsset(m_TestSchemaObject, k_TestConfigFolder + "/testSchemaObject.asset");
+            AssetDatabase.CreateAsset(m_TestSchemaObject, GetAssetPath("testSchemaObject.asset"));
             m_TestSchemaObjectSubClass = ScriptableObject.CreateInstance<CustomTestSchemaSubClass>();
-            AssetDatabase.CreateAsset(m_TestSchemaObjectSubClass, k_TestConfigFolder + "/testSchemaObjectSubClass.asset");
+            AssetDatabase.CreateAsset(m_TestSchemaObjectSubClass, GetAssetPath("testSchemaObjectSubClass.asset"));
         }
 
-       private static string ObjectToFilename(UnityEngine.Object obj)
+        private static string ObjectToFilename(UnityEngine.Object obj)
         {
             string guid;
-            if(!AssetDatabase.TryGetGUIDAndLocalFileIdentifier(obj, out guid, out long lfid))
+            if (!AssetDatabase.TryGetGUIDAndLocalFileIdentifier(obj, out guid, out long lfid))
                 return null;
-            
+
             string path = AssetDatabase.GUIDToAssetPath(guid);
-            if(path == null)
+            if (path == null)
                 return null;
 
             return Path.GetFileName(path);
@@ -164,6 +164,7 @@ namespace UnityEditor.AddressableAssets.Tests
             // Set up
             var group = Settings.CreateGroup("OldTestGroup", false, false, false, null);
             var testSchema = group.AddSchema<CustomTestSchema>();
+            AssetDatabase.SaveAssets();
 
             string testSchemaFilename = ObjectToFilename(testSchema);
             Assert.IsTrue(testSchemaFilename.Contains("OldTestGroup"));
@@ -179,5 +180,4 @@ namespace UnityEditor.AddressableAssets.Tests
             Assert.IsTrue(group.RemoveSchema<CustomTestSchema>());
         }
     }
-
 }

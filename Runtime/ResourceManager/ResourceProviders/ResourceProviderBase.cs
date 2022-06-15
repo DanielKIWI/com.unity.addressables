@@ -13,7 +13,13 @@ namespace UnityEngine.ResourceManagement.ResourceProviders
     /// </summary>
     public abstract class ResourceProviderBase : IResourceProvider, IInitializableObject
     {
+        /// <summary>
+        /// The unique identifier of the provider.
+        /// </summary>
         protected string m_ProviderId;
+        /// <summary>
+        /// The extra behavior of the provider.
+        /// </summary>
         protected ProviderBehaviourFlags m_BehaviourFlags = ProviderBehaviourFlags.None;
 
         /// <inheritdoc/>
@@ -21,7 +27,7 @@ namespace UnityEngine.ResourceManagement.ResourceProviders
         {
             get
             {
-                if(string.IsNullOrEmpty(m_ProviderId))
+                if (string.IsNullOrEmpty(m_ProviderId))
                     m_ProviderId = GetType().FullName;
 
                 return m_ProviderId;
@@ -41,7 +47,10 @@ namespace UnityEngine.ResourceManagement.ResourceProviders
             return GetDefaultType(location).IsAssignableFrom(t);
         }
 
-        /// <inheritdoc/>
+        /// <summary>
+        /// Converts information about the resource provider to a formatted string.
+        /// </summary>
+        /// <returns>Returns information about the resource provider.</returns>
         public override string ToString()
         {
             return ProviderId;
@@ -52,7 +61,6 @@ namespace UnityEngine.ResourceManagement.ResourceProviders
         /// </summary>
         /// <param name="location">The location of the object</param>
         /// <param name="obj">The object to release.</param>
-        /// <returns></returns>
         public virtual void Release(IResourceLocation location, object obj)
         {
         }
@@ -92,13 +100,60 @@ namespace UnityEngine.ResourceManagement.ResourceProviders
                 m_CallBack = callback;
             }
 
+            ///<inheritdoc />
+            protected  override bool InvokeWaitForCompletion()
+            {
+                m_RM?.Update(Time.unscaledDeltaTime);
+                if (!HasExecuted)
+                    InvokeExecute();
+                return true;
+            }
+
             protected override void Execute()
             {
-                if(m_CallBack != null)
+                if (m_CallBack != null)
                     Complete(m_CallBack(), true, "");
                 else
                     Complete(true, true, "");
             }
+        }
+    }
+
+    /// <summary>
+    /// Contains options used in Resource Provider load requests.  ProviderLoadRequestOptions are used to specify
+    /// parameters such as whether or not to ignore load failures and UnityWebRequest timeouts.
+    /// </summary>
+    [Serializable]
+    public class ProviderLoadRequestOptions
+    {
+        [SerializeField] private bool m_IgnoreFailures = false;
+        private int m_WebRequestTimeout = 0;
+
+        /// <summary>
+        /// Creates a memberwise clone of a given ProviderLoadRequestOption.
+        /// </summary>
+        /// <returns>The newly created ProviderLoadRequestOption object</returns>
+        public ProviderLoadRequestOptions Copy()
+        {
+            return (ProviderLoadRequestOptions) this.MemberwiseClone();
+        }
+
+        /// <summary>
+        /// IgnoreFailures for provider load requests
+        /// </summary>
+        public bool IgnoreFailures
+        {
+            get { return m_IgnoreFailures; }
+            set { m_IgnoreFailures = value; }
+        }
+
+        /// <summary>
+        /// UnityWebRequest Timeout
+        /// </summary>
+        public int WebRequestTimeout
+        {
+            get => m_WebRequestTimeout;
+            set => m_WebRequestTimeout = value;
         }
     }
 }

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Text;
 using Object = UnityEngine.Object;
 
@@ -19,6 +19,7 @@ namespace UnityEngine
         {
             return true;
         }
+
         /// <summary>
         /// Validates that the referenced asset allowable for this asset reference.
         /// </summary>
@@ -35,12 +36,20 @@ namespace UnityEngine
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property, AllowMultiple = false)]
     public sealed class AssetReferenceUILabelRestriction : AssetReferenceUIRestriction
     {
-        public string[] m_AllowedLabels;
-        public string m_CachedToString;
         /// <summary>
-        /// Construct a new AssetReferenceLabelAttribute.
+        /// Stores the labels allowed for the AssetReference.
         /// </summary>
-        /// <param name="allowedLabels">The labels allowed for the attributed AssetReference.</param>
+        public string[] m_AllowedLabels;
+
+        /// <summary>
+        /// Stores the allowed labels formatted as a string.
+        /// </summary>
+        public string m_CachedToString;
+
+        /// <summary>
+        /// Creates a new AssetReferenceUILabelRestriction object.
+        /// </summary>
+        /// <param name="allowedLabels">The labels allowed for the AssetReference.</param>
         public AssetReferenceUILabelRestriction(params string[] allowedLabels)
         {
             m_AllowedLabels = allowedLabels;
@@ -58,7 +67,10 @@ namespace UnityEngine
             return true;
         }
 
-        ///<inheritdoc/>
+        /// <summary>
+        /// Converts the information about the allowed labels to a formatted string.
+        /// </summary>
+        /// <returns>Returns information about the allowed labels as a string.</returns>
         public override string ToString()
         {
             if (m_CachedToString == null)

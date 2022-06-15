@@ -16,17 +16,12 @@ namespace UnityEditor.AddressableAssets.Settings
     [Serializable]
     public class AddressableAssetGroup : ScriptableObject, IComparer<AddressableAssetEntry>, ISerializationCallbackReceiver
     {
-
-
-
         internal static GUIContent RemoveSchemaContent = new GUIContent("Remove Schema", "Remove this schema.");
         internal static GUIContent MoveSchemaUpContent = new GUIContent("Move Up", "Move schema up one in list.");
         internal static GUIContent MoveSchemaDownContent = new GUIContent("Move Down", "Move schema down one in list.");
         internal static GUIContent ExpandSchemaContent = new GUIContent("Expand All", "Expand all settings within schema.");
-   
-        
-        
-        
+
+
         [FormerlySerializedAs("m_name")]
         [SerializeField]
         string m_GroupName;
@@ -65,13 +60,15 @@ namespace UnityEditor.AddressableAssets.Settings
             }
             set
             {
-                m_GroupName = value;
-                m_GroupName = m_GroupName.Replace('/', '-');
-                m_GroupName = m_GroupName.Replace('\\', '-');
-                if(m_GroupName != value)
+                string newName = value;
+                newName = newName.Replace('/', '-');
+                newName = newName.Replace('\\', '-');
+                if (newName != value)
                     Debug.Log("Group names cannot include '\\' or '/'.  Replacing with '-'. " + m_GroupName);
-                if (m_GroupName != name)
+                if (m_GroupName != newName)
                 {
+                    string previousName = m_GroupName;
+
                     string guid;
                     long localId;
                     if (AssetDatabase.TryGetGUIDAndLocalFileIdentifier(this, out guid, out localId))
@@ -79,25 +76,34 @@ namespace UnityEditor.AddressableAssets.Settings
                         var path = AssetDatabase.GUIDToAssetPath(guid);
                         if (!string.IsNullOrEmpty(path))
                         {
-                            var newPath = path.Replace(name, m_GroupName);
+                            var folder = Path.GetDirectoryName(path);
+                            var extension = Path.GetExtension(path);
+                            var newPath = $"{folder}/{newName}{extension}".Replace('\\', '/');
                             if (path != newPath)
                             {
                                 var setPath = AssetDatabase.MoveAsset(path, newPath);
-                                if (!string.IsNullOrEmpty(setPath) || !RenameSchemaAssets())
+                                bool success = false;
+                                if (string.IsNullOrEmpty(setPath))
+                                {
+                                    name = m_GroupName = newName;
+                                    success = RenameSchemaAssets();
+                                }
+
+                                if (success == false)
                                 {
                                     //unable to rename group due to invalid file name
                                     Debug.LogError("Rename of Group failed. " + setPath);
+                                    name = m_GroupName = previousName;
                                 }
-                                m_GroupName = name;
-
                             }
                         }
                     }
                     else
                     {
                         //this isn't a valid asset, which means it wasn't persisted, so just set the object name to the desired display name.
-                        name = m_GroupName;
+                        name = m_GroupName = newName;
                     }
+
                     SetDirty(AddressableAssetSettings.ModificationEvent.GroupRenamed, this, true, true);
                 }
             }
@@ -142,7 +148,12 @@ namespace UnityEditor.AddressableAssets.Settings
             if (added != null)
             {
                 added.Group = this;
+                if (m_Settings && m_Settings.IsPersisted)
+                    EditorUtility.SetDirty(added);
+
                 SetDirty(AddressableAssetSettings.ModificationEvent.GroupSchemaAdded, this, postEvent, true);
+
+                AssetDatabase.SaveAssets();
             }
             return added;
         }
@@ -159,7 +170,12 @@ namespace UnityEditor.AddressableAssets.Settings
             if (added != null)
             {
                 added.Group = this;
+                if (m_Settings && m_Settings.IsPersisted)
+                    EditorUtility.SetDirty(added);
+
                 SetDirty(AddressableAssetSettings.ModificationEvent.GroupSchemaAdded, this, postEvent, true);
+
+                AssetDatabase.SaveAssets();
             }
             return added;
         }
@@ -293,7 +309,14 @@ namespace UnityEditor.AddressableAssets.Settings
             get { return Guid == Settings.DefaultGroup.Guid; }
         }
 
-        /// <inheritdoc/>
+        /// <summary>
+        /// Compares two asset entries based on their guids.
+        /// </summary>
+        /// <param name="x">The first entry to compare.</param>
+        /// <param name="y">The second entry to compare.</param>
+        /// <returns>Returns 0 if both entries are null or equivalent.
+        /// Returns -1 if the first entry is null or the first entry precedes the second entry in the sort order.
+        /// Returns 1 if the second entry is null or the first entry follows the second entry in the sort order.</returns>
         public virtual int Compare(AddressableAssetEntry x, AddressableAssetEntry y)
         {
             if (x == null && y == null)
@@ -326,7 +349,6 @@ namespace UnityEditor.AddressableAssets.Settings
                 m_SerializeEntries = new List<AddressableAssetEntry>(entries.Count);
                 foreach (var e in entries)
                     m_SerializeEntries.Add(e);
-                m_SerializeEntries.Sort(this);
             }
         }
 
@@ -351,11 +373,10 @@ namespace UnityEditor.AddressableAssets.Settings
                 }
                 catch (Exception ex)
                 {
-                    Addressables.Log(e.address);
+                    Addressables.InternalSafeSerializationLog(e.address);
                     Debug.LogException(ex);
                 }
             }
-
         }
 
         void OnEnable()
@@ -365,7 +386,6 @@ namespace UnityEditor.AddressableAssets.Settings
 
         internal void Validate()
         {
-
             bool allValid = false;
             while (!allValid)
             {
@@ -378,7 +398,7 @@ namespace UnityEditor.AddressableAssets.Settings
                         allValid = false;
                         break;
                     }
-                    if(m_SchemaSet.Schemas[i].Group == null)
+                    if (m_SchemaSet.Schemas[i].Group == null)
                         m_SchemaSet.Schemas[i].Group = this;
                 }
             }
@@ -390,12 +410,12 @@ namespace UnityEditor.AddressableAssets.Settings
                     m_GroupName = AddressableAssetSettings.PlayerDataGroupName;
                 if (m_Data != null)
                 {
-                    if(!HasSchema<PlayerDataGroupSchema>())
+                    if (!HasSchema<PlayerDataGroupSchema>())
                         AddSchema<PlayerDataGroupSchema>();
                     m_Data = null;
                 }
             }
-            else if(Settings != null)
+            else if (Settings != null)
             {
                 if (m_GroupName == null)
                     m_GroupName = Settings.FindUniqueGroupName("Packed Content Group");
@@ -405,22 +425,25 @@ namespace UnityEditor.AddressableAssets.Settings
 
         internal void DedupeEnteries()
         {
+            if (m_Settings == null)
+                return;
+
             List<AddressableAssetEntry> removeEntries = new List<AddressableAssetEntry>();
             foreach (AddressableAssetEntry e in m_EntryMap.Values)
             {
                 AddressableAssetEntry lookedUpEntry = m_Settings.FindAssetEntry(e.guid);
                 if (lookedUpEntry.parentGroup != this)
                 {
-                    Debug.LogWarning(  e.address
-                                     + " is already a member of group "
-                                     + lookedUpEntry.parentGroup
-                                     + " but group "
-                                     + m_GroupName
-                                     + " contained a reference to it.  Removing referece.");
+                    Debug.LogWarning(e.address
+                        + " is already a member of group "
+                        + lookedUpEntry.parentGroup
+                        + " but group "
+                        + m_GroupName
+                        + " contained a reference to it.  Removing referece.");
                     removeEntries.Add(e);
                 }
             }
-            if(removeEntries.Count > 0)
+            if (removeEntries.Count > 0)
                 RemoveAssetEntries(removeEntries);
         }
 
@@ -443,8 +466,14 @@ namespace UnityEditor.AddressableAssets.Settings
         public virtual void GatherAllAssets(List<AddressableAssetEntry> results, bool includeSelf, bool recurseAll, bool includeSubObjects, Func<AddressableAssetEntry, bool> entryFilter = null)
         {
             foreach (var e in entries)
-                if(entryFilter == null || entryFilter(e))
+                if (entryFilter == null || entryFilter(e))
                     e.GatherAllAssets(results, includeSelf, recurseAll, includeSubObjects, entryFilter);
+        }
+
+        internal virtual void GatherAllAssetReferenceDrawableEntries(List<IReferenceEntryData> results)
+        {
+            foreach (var e in entries)
+                e.GatherAllAssetReferenceDrawableEntries(results, Settings);
         }
 
         internal void AddAssetEntry(AddressableAssetEntry e, bool postEvent = true)
@@ -463,9 +492,34 @@ namespace UnityEditor.AddressableAssets.Settings
         /// <returns></returns>
         public virtual AddressableAssetEntry GetAssetEntry(string guid)
         {
+            return GetAssetEntry(guid, false);
+        }
+
+        /// <summary>
+        /// Get an entry via the asset guid.
+        /// </summary>
+        /// <param name="guid">The asset guid.</param>
+        /// <param name="includeImplicit">Whether or not to include implicit asset entries in the search.</param>
+        /// <returns></returns>
+        public virtual AddressableAssetEntry GetAssetEntry(string guid, bool includeImplicit)
+        {
             AddressableAssetEntry entry;
-            m_EntryMap.TryGetValue(guid, out entry);
-            return entry;
+            if (m_EntryMap.TryGetValue(guid, out entry))
+            {
+                return entry;
+            }
+
+            if (includeImplicit)
+            {
+                foreach (var e in entries)
+                {
+                    var impEntry = e.GetImplicitEntry(guid);
+                    if (impEntry != null)
+                        return impEntry;
+                }
+            }
+
+            return null;
         }
 
         /// <summary>

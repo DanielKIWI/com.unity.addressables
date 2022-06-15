@@ -1,5 +1,8 @@
-﻿namespace UnityEditor.AddressableAssets.Settings
+namespace UnityEditor.AddressableAssets.Settings
 {
+    /// <summary>
+    /// Stores information about a group template.
+    /// </summary>
     public interface IGroupTemplate
     {
         /// <summary>

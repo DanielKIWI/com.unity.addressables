@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEditor.AddressableAssets.Build;
 using UnityEditor.AddressableAssets.Build.AnalyzeRules;
+using UnityEditor.AddressableAssets.Settings;
 using UnityEditor.IMGUI.Controls;
 using UnityEngine;
 
@@ -20,7 +21,7 @@ namespace UnityEditor.AddressableAssets.GUI
 
             Reload();
         }
-        
+
         private List<AnalyzeRuleContainerTreeViewItem> GatherAllInheritRuleContainers(TreeViewItem baseContainer)
         {
             List<AnalyzeRuleContainerTreeViewItem> retValue = new List<AnalyzeRuleContainerTreeViewItem>();
@@ -43,8 +44,8 @@ namespace UnityEditor.AddressableAssets.GUI
         {
             List<AnalyzeRuleContainerTreeViewItem> activeSelection = (from id in GetSelection()
                 let selection = FindItem(id, rootItem)
-                where selection is AnalyzeRuleContainerTreeViewItem
-                select selection as AnalyzeRuleContainerTreeViewItem).ToList();
+                    where selection is AnalyzeRuleContainerTreeViewItem
+                    select selection as AnalyzeRuleContainerTreeViewItem).ToList();
 
             List<AnalyzeRuleContainerTreeViewItem> inheritSelection = new List<AnalyzeRuleContainerTreeViewItem>();
             foreach (var selected in activeSelection)
@@ -98,11 +99,6 @@ namespace UnityEditor.AddressableAssets.GUI
             });
         }
 
-        public void RevertAllSelectedRules()
-        {
-            //TODO
-        }
-
         public bool SelectionContainsFixableRule { get; private set; }
         public bool SelectionContainsRuleContainer { get; private set; }
 
@@ -117,8 +113,8 @@ namespace UnityEditor.AddressableAssets.GUI
         {
             var allSelectedRuleContainers = (from id in selectedIds
                 let ruleContainer = FindItem(id, rootItem) as AnalyzeRuleContainerTreeViewItem
-                where ruleContainer != null
-                select ruleContainer);
+                    where ruleContainer != null
+                    select ruleContainer);
 
             List<AnalyzeRuleContainerTreeViewItem> allRuleContainers = new List<AnalyzeRuleContainerTreeViewItem>();
             foreach (var ruleContainer in allSelectedRuleContainers)
@@ -130,9 +126,9 @@ namespace UnityEditor.AddressableAssets.GUI
             allRuleContainers = allRuleContainers.Distinct().ToList();
 
             SelectionContainsErrors = (from container in allRuleContainers
-                                       from child in container.children
-                                       where child is AnalyzeResultsTreeViewItem && (child as AnalyzeResultsTreeViewItem).IsError
-                                       select child).Any();
+                from child in container.children
+                where child is AnalyzeResultsTreeViewItem && (child as AnalyzeResultsTreeViewItem).IsError
+                select child).Any();
 
             SelectionContainsRuleContainer = allRuleContainers.Any();
 
@@ -154,8 +150,21 @@ namespace UnityEditor.AddressableAssets.GUI
                 else
                     menu.AddDisabledItem(new GUIContent("Fix Analyze Rule"));
 
-                //TODO
-                //menu.AddItem(new GUIContent("Revert Analyze Rule"), false, RevertAllSelectedRules);
+                IList<int> selectedIds = GetSelection();
+                if (selectedIds.Count == 1)
+                {
+                    AnalyzeRuleContainerTreeViewItem analyzeRuleContainer = FindItem(selectedIds[0], rootItem) as AnalyzeRuleContainerTreeViewItem;
+                    if (analyzeRuleContainer != null)
+                    {
+                        foreach (var customMenuItem in analyzeRuleContainer.analyzeRule.GetCustomContextMenuItems())
+                        {
+                            if(customMenuItem.MenuEnabled)
+                                menu.AddItem(new GUIContent(customMenuItem.MenuName), customMenuItem.ToggledOn, () => customMenuItem.MenuAction());
+                            else
+                                menu.AddDisabledItem(new GUIContent(customMenuItem.MenuName));
+                        }
+                    }
+                }
 
                 menu.ShowAsContext();
                 Repaint();
@@ -171,6 +180,8 @@ namespace UnityEditor.AddressableAssets.GUI
             string baseName = "Analyze Rules";
             string fixableRules = "Fixable Rules";
             string unfixableRules = "Unfixable Rules";
+
+            AnalyzeSystem.TreeView = this;
 
             AnalyzeRuleContainerTreeViewItem baseViewItem = new AnalyzeRuleContainerTreeViewItem(baseName.GetHashCode(), m_CurrentDepth, baseName);
             baseViewItem.children = new List<TreeViewItem>();
@@ -196,11 +207,10 @@ namespace UnityEditor.AddressableAssets.GUI
                 AnalyzeRuleContainerTreeViewItem ruleContainer = new AnalyzeRuleContainerTreeViewItem(
                     AnalyzeSystem.Rules[i].ruleName.GetHashCode(), m_CurrentDepth, AnalyzeSystem.Rules[i]);
 
-                if(ruleContainer.analyzeRule.CanFix)
+                if (ruleContainer.analyzeRule.CanFix)
                     fixable.AddChild(ruleContainer);
                 else
                     unfixable.AddChild(ruleContainer);
-
             }
 
             m_CurrentDepth++;
@@ -209,12 +219,12 @@ namespace UnityEditor.AddressableAssets.GUI
             var ruleContainers = GatherAllInheritRuleContainers(baseViewItem);
             foreach (var ruleContainer in ruleContainers)
             {
+                if(ruleContainer == null)
+                    continue;
 
-                if (ruleContainer != null && AnalyzeSystem.AnalyzeData.Data.ContainsKey(ruleContainer.analyzeRule.ruleName))
-                {
-                    EditorUtility.DisplayProgressBar("Calculating Results for " + ruleContainer.displayName, "", (index / ruleContainers.Count) % 100);
+                EditorUtility.DisplayProgressBar("Calculating Analyze Results...", ruleContainer.displayName, (index / (float)ruleContainers.Count));
+                if (AnalyzeSystem.AnalyzeData.Data.ContainsKey(ruleContainer.analyzeRule.ruleName))
                     BuildResults(ruleContainer, AnalyzeSystem.AnalyzeData.Data[ruleContainer.analyzeRule.ruleName]);
-                }
 
                 index++;
             }
@@ -253,7 +263,7 @@ namespace UnityEditor.AddressableAssets.GUI
                     {
                         AnalyzeResultsTreeViewItem item = new AnalyzeResultsTreeViewItem(hash, i + m_CurrentDepth, resPath[i], parentHash, result.severity);
                         item.children = new List<TreeViewItem>();
-                        treeViewItems.AddLast(item);  
+                        treeViewItems.AddLast(item);
                     }
                 }
 
@@ -263,7 +273,7 @@ namespace UnityEditor.AddressableAssets.GUI
             //create dictionary
             foreach (var item in treeViewItems)
             {
-                if (item != null) 
+                if (item != null)
                 {
                     if (!hashToTreeViewItems.ContainsKey(item.id))
                         hashToTreeViewItems.Add(item.id, item);
@@ -272,13 +282,14 @@ namespace UnityEditor.AddressableAssets.GUI
 
             //Build results tree
             index = 0;
+            int updateFrequency = Mathf.Max(hashToTreeViewItems.Keys.Count / 10, 1);
             foreach (var hash in hashToTreeViewItems.Keys)
             {
-                EditorUtility.DisplayProgressBar("Building Results Tree.", hashToTreeViewItems[hash].displayName, (index / hashToTreeViewItems.Keys.Count) % 100);
-
                 TreeViewItem item;
                 if (hashToTreeViewItems.TryGetValue(hash, out item))
                 {
+                    if (index == 0 || index % updateFrequency == 0)
+                        EditorUtility.DisplayProgressBar("Building Results Tree...", item.displayName, (index / hashToTreeViewItems.Keys.Count));
                     if ((item as AnalyzeResultsTreeViewItem) != null && hashToTreeViewItems.ContainsKey((item as AnalyzeResultsTreeViewItem).parentHash))
                     {
                         var parent = hashToTreeViewItems[(item as AnalyzeResultsTreeViewItem).parentHash];
@@ -300,7 +311,7 @@ namespace UnityEditor.AddressableAssets.GUI
             foreach (var node in allTreeViewItems)
                 (node as AnalyzeTreeViewItemBase)?.AddIssueCountToName();
 
-            EditorUtility.SetDirty(AnalyzeSystem.AnalyzeData);
+            AnalyzeSystem.SerializeData();
         }
 
         protected override void RowGUI(RowGUIArgs args)
@@ -372,11 +383,10 @@ namespace UnityEditor.AddressableAssets.GUI
         {
             get { return currentDisplayName; }
             set { baseDisplayName = value; }
-
         }
 
         public AnalyzeTreeViewItemBase(int id, int depth, string displayName) : base(id, depth,
-            displayName)
+                                                                                     displayName)
         {
             currentDisplayName = baseDisplayName = displayName;
         }
@@ -413,12 +423,11 @@ namespace UnityEditor.AddressableAssets.GUI
         }
 
         public AnalyzeResultsTreeViewItem(int id, int depth, string displayName, int parent, MessageType type) : base(id, depth,
-            displayName)
+                                                                                                                      displayName)
         {
             severity = type;
             parentHash = parent;
         }
-
     }
 
     class AnalyzeRuleContainerTreeViewItem : AnalyzeTreeViewItemBase

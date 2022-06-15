@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using UnityEditor.IMGUI.Controls;
 using UnityEngine;
@@ -66,11 +66,16 @@ namespace UnityEditor.AddressableAssets.GUI
 
         readonly Dictionary<string, ProfileVarItem> m_ItemMap;
 
+        internal int Count
+        {
+            get { return m_ItemMap.Count; }
+        }
+
         public float RowHeight
         {
             get { return rowHeight; }
         }
-        
+
         public HostingServicesProfileVarsTreeView(TreeViewState state, MultiColumnHeader multiColumnHeader) : base(state, multiColumnHeader)
         {
             showBorder = true;
@@ -96,14 +101,14 @@ namespace UnityEditor.AddressableAssets.GUI
                 return;
             }
 
-            var item = new ProfileVarItem(key, value) {id = m_ItemMap.Count};
+            var item = new ProfileVarItem(key, value) { id = m_ItemMap.Count };
             m_ItemMap.Add(key, item);
             Reload();
         }
 
         protected override TreeViewItem BuildRoot()
         {
-            var root = new TreeViewItem(-1, -1) {children = new List<TreeViewItem>()};
+            var root = new TreeViewItem(-1, -1) { children = new List<TreeViewItem>() };
             foreach (var item in m_ItemMap.Values)
                 root.AddChild(item);
 

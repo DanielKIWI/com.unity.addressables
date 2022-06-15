@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using UnityEditor.Presets;
 using UnityEngine;
@@ -6,6 +6,9 @@ using UnityEngine.Assertions;
 
 namespace UnityEditor.AddressableAssets.Settings
 {
+    /// <summary>
+    /// Used to create template groups to make it easier for the user to create new groups.
+    /// </summary>
     [CreateAssetMenu(fileName = "AddressableAssetGroupTemplate.asset", menuName = "Addressables/Group Templates/Blank Group Template")]
     public class AddressableAssetGroupTemplate : ScriptableObject, IGroupTemplate
     {
@@ -15,7 +18,7 @@ namespace UnityEditor.AddressableAssets.Settings
         private string m_Description;
         [SerializeField]
         private AddressableAssetSettings m_Settings;
-        
+
         private AddressableAssetSettings Settings
         {
             get
@@ -26,7 +29,7 @@ namespace UnityEditor.AddressableAssets.Settings
                 return m_Settings;
             }
         }
-        
+
         /// <summary>
         /// Returns a list of Preset objects for AddressableAssetGroupSchema associated with this template
         /// </summary>
@@ -35,12 +38,12 @@ namespace UnityEditor.AddressableAssets.Settings
             get
             {
                 List<Preset> m_SchemaPresetObjects = new List<Preset>(m_SchemaObjects.Count);
-                foreach( AddressableAssetGroupSchema schemaObject in m_SchemaObjects )
-                    m_SchemaPresetObjects.Add( new Preset( schemaObject ) );
+                foreach (AddressableAssetGroupSchema schemaObject in m_SchemaObjects)
+                    m_SchemaPresetObjects.Add(new Preset(schemaObject));
                 return m_SchemaPresetObjects;
             }
         }
-        
+
         /// <summary>
         /// Returns the list of Preset objects of AddressableAssetGroupSchema associated with this template
         /// </summary>
@@ -48,7 +51,7 @@ namespace UnityEditor.AddressableAssets.Settings
         {
             get { return m_SchemaObjects; }
         }
-        
+
         /// <summary>
         /// The name of the AddressableAssetGroupTemplate
         /// </summary>
@@ -65,7 +68,7 @@ namespace UnityEditor.AddressableAssets.Settings
             get { return m_Description; }
             set { m_Description = value; }
         }
-        
+
         /// <summary>
         /// Gets the types of the AddressableAssetGroupSchema associated with this template
         /// </summary>
@@ -77,22 +80,22 @@ namespace UnityEditor.AddressableAssets.Settings
                 types[i] = m_SchemaObjects[i].GetType();
             return types;
         }
-        
+
         /// <summary>
         /// Applies schema values for the group to the schema values found in the template
         /// </summary>
         /// <param name="group">The AddressableAssetGroup to apply the schema settings to</param>
-        public void ApplyToAddressableAssetGroup( AddressableAssetGroup group )
+        public void ApplyToAddressableAssetGroup(AddressableAssetGroup group)
         {
-            foreach( AddressableAssetGroupSchema schema in group.Schemas )
+            foreach (AddressableAssetGroupSchema schema in group.Schemas)
             {
                 List<Preset> presets = SchemaPresetObjects;
-                foreach( Preset p in presets )
+                foreach (Preset p in presets)
                 {
-                    Assert.IsNotNull( p );
-                    if( p.CanBeAppliedTo( schema ) )
+                    Assert.IsNotNull(p);
+                    if (p.CanBeAppliedTo(schema))
                     {
-                        p.ApplyTo( schema );
+                        p.ApplyTo(schema);
                         schema.Group = group;
                     }
                 }
@@ -156,7 +159,7 @@ namespace UnityEditor.AddressableAssets.Settings
         /// <param name="type">The type of AddressableAssetGroupSchema to be removed.</param>
         /// <param name="postEvent">If true, the event is propagated to callbacks.</param>
         /// <returns>If true, the type was removed successfully.</returns>
-        public bool RemoveSchema( Type type, bool postEvent = true)
+        public bool RemoveSchema(Type type, bool postEvent = true)
         {
             if (type == null)
             {
@@ -169,35 +172,35 @@ namespace UnityEditor.AddressableAssets.Settings
                 return false;
             }
 
-            for( int i = 0; i < m_SchemaObjects.Count; ++i )
+            for (int i = 0; i < m_SchemaObjects.Count; ++i)
             {
-                if( m_SchemaObjects[i].GetType() == type )
+                if (m_SchemaObjects[i].GetType() == type)
                     return RemoveSchema(i, postEvent);
             }
-            
+
             return false;
         }
-        
+
         /// <summary>
         /// Removes the Schema at the given index.
         /// </summary>
         /// <param name="index">The index of the object to be removed.</param>
         /// <param name="postEvent">If true, the event is propagated to callbacks.</param>
         /// <returns>If true, the type was removed successfully.</returns>
-        internal bool RemoveSchema( int index, bool postEvent = true)
+        internal bool RemoveSchema(int index, bool postEvent = true)
         {
-            if( index == -1 )
+            if (index == -1)
                 return false;
-            
-            AssetDatabase.RemoveObjectFromAsset( m_SchemaObjects[index] );
-            DestroyImmediate( m_SchemaObjects[index] );
-            m_SchemaObjects.RemoveAt( index );
-            
+
+            AssetDatabase.RemoveObjectFromAsset(m_SchemaObjects[index]);
+            DestroyImmediate(m_SchemaObjects[index]);
+            m_SchemaObjects.RemoveAt(index);
+
             SetDirty(AddressableAssetSettings.ModificationEvent.GroupTemplateSchemaRemoved, this, postEvent);
             AssetDatabase.SaveAssets();
             return true;
         }
-        
+
         /// <summary>
         /// Marks the object as modified.
         /// </summary>
@@ -209,7 +212,10 @@ namespace UnityEditor.AddressableAssets.Settings
             if (Settings != null)
             {
                 if (Settings.IsPersisted && this != null)
+                {
                     EditorUtility.SetDirty(this);
+                    AddressableAssetUtility.OpenAssetIfUsingVCIntegration(this);
+                }
                 Settings.SetDirty(modificationEvent, eventData, postEvent, false);
             }
         }
@@ -231,9 +237,9 @@ namespace UnityEditor.AddressableAssets.Settings
         /// <returns>The schema if found, otherwise null.</returns>
         public AddressableAssetGroupSchema GetSchemaByType(Type type)
         {
-            foreach(var schema in m_SchemaObjects)
+            foreach (var schema in m_SchemaObjects)
             {
-                if(schema.GetType() == type)
+                if (schema.GetType() == type)
                 {
                     return schema;
                 }
@@ -248,7 +254,7 @@ namespace UnityEditor.AddressableAssets.Settings
         /// <returns>Valid index if found, otherwise returns -1.</returns>
         public int FindSchema(Type type)
         {
-            for(int i=0; i < m_SchemaObjects.Count; i++)
+            for (int i = 0; i < m_SchemaObjects.Count; i++)
             {
                 if (m_SchemaObjects[i].GetType() == type)
                 {

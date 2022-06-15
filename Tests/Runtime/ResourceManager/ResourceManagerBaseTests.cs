@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
@@ -22,7 +22,7 @@ namespace UnityEngine.ResourceManagement.Tests
         List<IResourceLocation> m_Locations = new List<IResourceLocation>();
         protected virtual string AssetPathPrefix { get { return ""; } }
 
-        protected abstract IResourceLocation[] SetupLocations(KeyValuePair<string, string> [] assets);
+        protected abstract IResourceLocation[] SetupLocations(KeyValuePair<string, string>[] assets);
         string GetAssetPath(int i)
         {
             return RootFolder + "/" + AssetPathPrefix + "asset" + i + ".prefab";
@@ -67,7 +67,7 @@ namespace UnityEngine.ResourceManagement.Tests
 
             var assetList = new List<KeyValuePair<string, string>>();
             for (int i = 0; i < kAssetCount; i++)
-                assetList.Add(new KeyValuePair<string,string>("asset" + i, GetAssetPath(i)));
+                assetList.Add(new KeyValuePair<string, string>("asset" + i, GetAssetPath(i)));
 
             m_Locations.AddRange(SetupLocations(assetList.ToArray()));
         }
@@ -83,12 +83,12 @@ namespace UnityEngine.ResourceManagement.Tests
         {
             Assert.Zero(m_ResourceManager.OperationCacheCount);
         }
-        
+
         [UnityTest]
         public IEnumerator CanProvideWithCallback()
         {
             GameObject[] goResult = new GameObject[] { null };
-            bool []wasCallbackCalled = new bool[] { false };
+            bool[] wasCallbackCalled = new bool[] { false };
             var op = m_ResourceManager.ProvideResource<GameObject>(m_Locations[0]);
             op.Completed += (x) => { wasCallbackCalled[0] = true; goResult[0] = x.Result; };
             yield return op;
@@ -143,7 +143,7 @@ namespace UnityEngine.ResourceManagement.Tests
             var comp = go.GetComponent<AsyncComponent>();
             comp.resourceManager = m_ResourceManager;
             comp.location = m_Locations[0];
-            while(!comp.done)
+            while (!comp.done)
                 yield return null;
             Assert.IsNotNull(comp.result);
             comp.operation.Release();
@@ -157,13 +157,16 @@ namespace UnityEngine.ResourceManagement.Tests
             public GameObject result;
             public bool done = false;
             public AsyncOperationHandle<GameObject> operation;
+            public bool addCompletedCallback;
+            public bool callbackDone = false;
             async void Start()
             {
                 operation = resourceManager.ProvideResource<GameObject>(location);
+                if (addCompletedCallback)
+                    operation.Completed += handle => { callbackDone = true; };
+
                 await operation.Task;
                 result = operation.Result;
-                await operation.Task;
-                await operation.Task;
                 done = true;
             }
         }
@@ -183,6 +186,29 @@ namespace UnityEngine.ResourceManagement.Tests
             Assert.IsNotNull(comp.result);
             Assert.True(comp.operation.PercentComplete == 1 && comp.operation.IsDone);
             Assert.True(comp.operation.Task.IsCompleted);
+
+            // Cleanup
+            comp.operation.Release();
+            GameObject.Destroy(go);
+        }
+        
+        [UnityTest]
+        public IEnumerator WhenAsyncOperationIsDone_TasksAndCallbackIsCompleted()
+        {
+            // Setup
+            var go = new GameObject("test", typeof(AsyncAwaitMultipleComponent));
+            var comp = go.GetComponent<AsyncAwaitMultipleComponent>();
+            comp.resourceManager = m_ResourceManager;
+            comp.location = m_Locations[0];
+            comp.addCompletedCallback = true;
+
+            // Test
+            while (!comp.done)
+                yield return null;
+            Assert.IsNotNull(comp.result);
+            Assert.True(comp.operation.PercentComplete == 1 && comp.operation.IsDone);
+            Assert.True(comp.operation.Task.IsCompleted, "Task has not completed before component was done");
+            Assert.True(comp.callbackDone, "Callback had not completed before component was done");
 
             // Cleanup
             comp.operation.Release();

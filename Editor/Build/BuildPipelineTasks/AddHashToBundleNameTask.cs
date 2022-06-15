@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEditor.AddressableAssets.Build.DataBuilders;
@@ -12,7 +12,7 @@ using UnityEngine;
 namespace UnityEditor.AddressableAssets.Build.BuildPipelineTasks
 {
     /// <summary>
-    /// The BuildTask used to append the asset hash to the internal bundle name. 
+    /// The BuildTask used to append the asset hash to the internal bundle name.
     /// </summary>
     public class AddHashToBundleNameTask : IBuildTask
     {
@@ -47,7 +47,7 @@ namespace UnityEditor.AddressableAssets.Build.BuildPipelineTasks
         public ReturnCode Run()
         {
             var aa = m_AaBuildContext as AddressableAssetsBuildContext;
-            if (!aa.settings.UniqueBundleIds)
+            if (!aa.Settings.UniqueBundleIds)
                 return ReturnCode.Success;
 
             var newBundleLayout = new Dictionary<string, List<GUID>>();
@@ -70,15 +70,16 @@ namespace UnityEditor.AddressableAssets.Build.BuildPipelineTasks
             return ReturnCode.Success;
         }
 
-        private RawHash GetAssetsHash(List<GUID> assets, AddressableAssetsBuildContext context)
+        internal RawHash GetAssetsHash(List<GUID> assets, AddressableAssetsBuildContext context)
         {
+            assets.Sort();
             var hashes = new HashSet<Hash128>();
             foreach (var g in assets)
             {
                 AssetLoadInfo assetInfo;
                 if (m_DependencyData.AssetInfo.TryGetValue(g, out assetInfo))
                 {
-                    var diskOnlyReferencedObjects = assetInfo.referencedObjects.Where(ro => context.settings.FindAssetEntry(ro.guid.ToString()) == null).ToList();
+                    var diskOnlyReferencedObjects = assetInfo.referencedObjects.Where(ro => context.Settings.FindAssetEntry(ro.guid.ToString()) == null).ToList();
                     GetAssetHashes(hashes, g, diskOnlyReferencedObjects, m_Cache != null && m_Parameters.UseCache);
                 }
             }

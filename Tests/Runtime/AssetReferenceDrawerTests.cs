@@ -1,4 +1,4 @@
-﻿using NUnit.Framework;
+using NUnit.Framework;
 using System;
 using System.Collections;
 using System.IO;
@@ -22,12 +22,13 @@ namespace AssetReferenceDrawerTests
         internal override void Setup(AddressableAssetSettings settings, string tempAssetFolder)
         {
             var group = settings.CreateGroup("TestStuff", true, false, false, null, typeof(BundledAssetGroupSchema));
+            group.GetSchema<BundledAssetGroupSchema>().BundleNaming = BundledAssetGroupSchema.BundleNamingStyle.OnlyHash;
             Directory.CreateDirectory(tempAssetFolder);
             var texturePath = Path.Combine(tempAssetFolder, string.Concat(GetBuildScriptTypeFromMode(BuildScriptMode), textureName, ".png"));
             CreateTextureOnPath(texturePath);
             var texEntry = settings.CreateOrMoveEntry(AssetDatabase.AssetPathToGUID(texturePath), group, false, false);
             texEntry.address = textureName;
-            texEntry.SetLabel(allowedLabels[0], true, false);
+            texEntry.SetLabel(allowedLabels[0], true, true);
         }
 
         void CreateTextureOnPath(string spritePath)
@@ -36,6 +37,7 @@ namespace AssetReferenceDrawerTests
             File.WriteAllBytes(spritePath, data);
             AssetDatabase.ImportAsset(spritePath, ImportAssetOptions.ForceSynchronousImport | ImportAssetOptions.ForceUpdate);
         }
+
 #endif
         string LabelsToString()
         {
@@ -118,26 +120,27 @@ namespace AssetReferenceDrawerTests
             var surrogate = AssetReferenceUtility.GetSurrogate(typeof(TestAssetReferenceUICustomRestriction));
             Assert.AreEqual(typeof(TestAssetReferenceUIRestrictionSurrogate3), surrogate);
         }
+
 #endif
     }
 
 #if UNITY_EDITOR
-  
+
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property, AllowMultiple = false)]
     class TestAssetReferenceUICustomRestriction : AssetReferenceUIRestriction
-    { }
-    
+    {}
+
     class TestAssetReferenceUICustomRestrictionSurrogate : AssetReferenceUIRestrictionSurrogate
-    { }
+    {}
 
     class TestAssetReferenceUIRestrictionSurrogate1 : TestAssetReferenceUICustomRestrictionSurrogate
-    { }
+    {}
 
     class TestAssetReferenceUIRestrictionSurrogate2 : TestAssetReferenceUIRestrictionSurrogate1
-    { }
+    {}
 
     class TestAssetReferenceUIRestrictionSurrogate3 : TestAssetReferenceUIRestrictionSurrogate2
-    { }
+    {}
 
     class AssetReferenceDrawerTests_FastMode : AssetReferenceDrawerTests { protected override TestBuildScriptMode BuildScriptMode { get { return TestBuildScriptMode.Fast; } } }
 
@@ -148,5 +151,4 @@ namespace AssetReferenceDrawerTests
 
     [UnityPlatform(exclude = new[] { RuntimePlatform.WindowsEditor, RuntimePlatform.OSXEditor, RuntimePlatform.LinuxEditor })]
     class AssetReferenceDrawerTests_PackedMode : AssetReferenceDrawerTests { protected override TestBuildScriptMode BuildScriptMode { get { return TestBuildScriptMode.Packed; } } }
-
 }

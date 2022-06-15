@@ -1,8 +1,10 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using UnityEditor.AddressableAssets.Settings;
 using UnityEditor.AddressableAssets.Settings.GroupSchemas;
 using UnityEditor.Build.Pipeline;
 using UnityEngine;
+using UnityEditor.Build.Content;
+using BuildCompression = UnityEngine.BuildCompression;
 
 namespace UnityEditor.AddressableAssets.Build.DataBuilders
 {
@@ -24,14 +26,25 @@ namespace UnityEditor.AddressableAssets.Build.DataBuilders
         public AddressableAssetsBundleBuildParameters(AddressableAssetSettings aaSettings, Dictionary<string, string> bundleToAssetGroup, BuildTarget target, BuildTargetGroup group, string outputFolder) : base(target, group, outputFolder)
         {
             UseCache = true;
+            ContiguousBundles = aaSettings.ContiguousBundles;
+#if NONRECURSIVE_DEPENDENCY_DATA
+            NonRecursiveDependencies = aaSettings.NonRecursiveBuilding;
+#endif
+            DisableVisibleSubAssetRepresentations = aaSettings.DisableVisibleSubAssetRepresentations;
+
             m_settings = aaSettings;
             m_bundleToAssetGroup = bundleToAssetGroup;
 
             //If default group has BundledAssetGroupSchema use the compression there otherwise check if the target is webgl or not and try set the compression accordingly
-            if(m_settings.DefaultGroup.HasSchema<BundledAssetGroupSchema>())
+            if (m_settings.DefaultGroup.HasSchema<BundledAssetGroupSchema>())
                 BundleCompression = ConverBundleCompressiontToBuildCompression(m_settings.DefaultGroup.GetSchema<BundledAssetGroupSchema>().Compression);
             else
                 BundleCompression = target == BuildTarget.WebGL ? BuildCompression.LZ4Runtime : BuildCompression.LZMA;
+
+#if UNITY_2019_4_OR_NEWER
+            if (aaSettings.StripUnityVersionFromBundleBuild)
+                ContentBuildFlags |= ContentBuildFlags.StripUnityVersion;
+#endif
         }
 
         private BuildCompression ConverBundleCompressiontToBuildCompression(
@@ -44,7 +57,7 @@ namespace UnityEditor.AddressableAssets.Build.DataBuilders
                     break;
                 case BundledAssetGroupSchema.BundleCompressionMode.LZ4:
                     compresion = BuildCompression.LZ4;
-                        break;
+                    break;
                 case BundledAssetGroupSchema.BundleCompressionMode.Uncompressed:
                     compresion = BuildCompression.Uncompressed;
                     break;

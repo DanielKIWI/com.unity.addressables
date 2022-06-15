@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -7,6 +7,7 @@ using UnityEditor.AddressableAssets.Settings.GroupSchemas;
 using UnityEditor.Build.Pipeline.Interfaces;
 using UnityEditor.Build.Pipeline.Utilities;
 using UnityEngine;
+using UnityEngine.AddressableAssets;
 using UnityEngine.AddressableAssets.Initialization;
 using UnityEngine.AddressableAssets.ResourceLocators;
 using UnityEngine.ResourceManagement.ResourceProviders;
@@ -33,6 +34,11 @@ namespace UnityEditor.AddressableAssets.Build.DataBuilders
         [SerializedTypeRestrictionAttribute(type = typeof(ISceneProvider))]
         public SerializedType sceneProviderType = new SerializedType() { Value = typeof(SceneProvider) };
 
+        /// <summary>
+        /// Stores the logged information of all the build tasks.
+        /// </summary>
+        public IBuildLogger Log { get { return m_Log; } }
+
         [NonSerialized]
         internal IBuildLogger m_Log;
 
@@ -45,6 +51,15 @@ namespace UnityEditor.AddressableAssets.Build.DataBuilders
             {
                 return "Undefined";
             }
+        }
+        internal static void WriteBuildLog(BuildLog log, string directory)
+        {
+            Directory.CreateDirectory(directory);
+#if UNITY_2019_2_OR_NEWER // PackageManager package inspection APIs didn't exist until 2019.2
+            PackageManager.PackageInfo info = PackageManager.PackageInfo.FindForAssembly(typeof(BuildScriptBase).Assembly);
+            log.AddMetaData(info.name, info.version);
+#endif
+            File.WriteAllText(Path.Combine(directory, "AddressablesBuildTEP.json"), log.FormatForTraceEventProfiler());
         }
 
         /// <summary>
@@ -63,26 +78,33 @@ namespace UnityEditor.AddressableAssets.Build.DataBuilders
                 return AddressableAssetBuildResult.CreateResult<TResult>(null, 0, message);
             }
 
-            BuildLog log = new BuildLog();
-            m_Log = log;
+            m_Log = (builderInput.Logger != null) ? builderInput.Logger : new BuildLog();
+
             AddressablesRuntimeProperties.ClearCachedPropertyValues();
 
-            TResult result;
+            TResult result = default;
             // Append the file registry to the results
-            using (log.ScopedStep(LogLevel.Info, $"Building {this.Name}"))
+            using (m_Log.ScopedStep(LogLevel.Info, $"Building {this.Name}"))
             {
-                result = BuildDataImplementation<TResult>(builderInput);
+                try
+                {
+                    result = BuildDataImplementation<TResult>(builderInput);
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError(e.Message);
+                    return AddressableAssetBuildResult.CreateResult<TResult>(null, 0, e.Message);
+                }
                 if (result != null)
                     result.FileRegistry = builderInput.Registry;
             }
 
-            var perfOutputDirectory = Path.GetDirectoryName(Application.dataPath) + "/Library/com.unity.addressables";
-            File.WriteAllText(Path.Combine(perfOutputDirectory, "AddressablesBuildTEP.json"), log.FormatAsTraceEventProfiler());
-            File.WriteAllText(Path.Combine(perfOutputDirectory, "AddressablesBuildLog.txt"), log.FormatAsText());
+            if (builderInput.Logger == null && m_Log != null)
+                WriteBuildLog((BuildLog)m_Log, Path.GetDirectoryName(Application.dataPath) + "/" + Addressables.LibraryPath);
 
             return result;
         }
-        
+
         /// <summary>
         /// The implementation of <see cref="BuildData{TResult}"/>.  That is the public entry point,
         ///  this is the home for child class overrides.
@@ -100,22 +122,29 @@ namespace UnityEditor.AddressableAssets.Build.DataBuilders
         /// </summary>
         /// <param name="aaContext">The Addressables builderInput object to base the group processing on</param>
         /// <returns>An error string if there were any problems processing the groups</returns>
-        protected virtual string ProcessAllGroups(AddressableAssetsBuildContext aaContext) 
+        protected virtual string ProcessAllGroups(AddressableAssetsBuildContext aaContext)
         {
             if (aaContext == null ||
-                aaContext.settings == null ||
-                aaContext.settings.groups == null)
+                aaContext.Settings == null ||
+                aaContext.Settings.groups == null)
             {
                 return "No groups found to process in build script " + Name;
             }
             //intentionally for not foreach so groups can be added mid-loop.
-            for(int index = 0; index < aaContext.settings.groups.Count; index++)  
+            for (int index = 0; index < aaContext.Settings.groups.Count; index++)
             {
-                AddressableAssetGroup assetGroup = aaContext.settings.groups[index];
+                AddressableAssetGroup assetGroup = aaContext.Settings.groups[index];
                 if (assetGroup == null)
                     continue;
 
-                EditorUtility.DisplayProgressBar($"Processing Addressable Group", assetGroup.Name, (float)index/aaContext.settings.groups.Count);
+                if (assetGroup.Schemas.Find((x) => x.GetType() == typeof(PlayerDataGroupSchema)) &&
+                    assetGroup.Schemas.Find((x) => x.GetType() == typeof(BundledAssetGroupSchema)))
+                {
+                    EditorUtility.ClearProgressBar();
+                    return $"Addressable group {assetGroup.Name} cannot have both a {typeof(PlayerDataGroupSchema).Name} and a {typeof(BundledAssetGroupSchema).Name}";
+                }
+
+                EditorUtility.DisplayProgressBar($"Processing Addressable Group", assetGroup.Name, (float)index / aaContext.Settings.groups.Count);
                 var errorString = ProcessGroup(assetGroup, aaContext);
                 if (!string.IsNullOrEmpty(errorString))
                 {
@@ -127,9 +156,9 @@ namespace UnityEditor.AddressableAssets.Build.DataBuilders
             EditorUtility.ClearProgressBar();
             return string.Empty;
         }
-        
+
         /// <summary>
-        /// Build processing of an individual group.  
+        /// Build processing of an individual group.
         /// </summary>
         /// <param name="assetGroup">The group to process</param>
         /// <param name="aaContext">The Addressables builderInput object to base the group processing on</param>
@@ -152,6 +181,7 @@ namespace UnityEditor.AddressableAssets.Build.DataBuilders
         /// <summary>
         /// Utility method for creating locations from player data.
         /// </summary>
+        /// <param name="playerDataSchema">The schema for the group.</param>
         /// <param name="assetGroup">The group to extract the locations from.</param>
         /// <param name="locations">The list of created locations to fill in.</param>
         /// <param name="providerTypes">Any unknown provider types are added to this set in order to ensure they are not stripped.</param>
@@ -218,7 +248,6 @@ namespace UnityEditor.AddressableAssets.Build.DataBuilders
                 registry.RemoveFile(path);
                 return false;
             }
-
         }
 
         /// <summary>
@@ -226,12 +255,12 @@ namespace UnityEditor.AddressableAssets.Build.DataBuilders
         /// </summary>
         public virtual void ClearCachedData()
         {
-
         }
 
         /// <summary>
         /// Checks to see if the data is built for the given builder.
         /// </summary>
+        /// <returns>Returns true if the data is built. Returns false otherwise.</returns>
         public virtual bool IsDataBuilt()
         {
             return false;

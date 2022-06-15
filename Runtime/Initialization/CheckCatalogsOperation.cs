@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
 using UnityEngine.AddressableAssets.ResourceProviders;
 using UnityEngine.ResourceManagement.AsyncOperations;
@@ -34,11 +34,28 @@ namespace UnityEngine.AddressableAssets
 
             ContentCatalogProvider ccp = m_Addressables.ResourceManager.ResourceProviders
                 .FirstOrDefault(rp => rp.GetType() == typeof(ContentCatalogProvider)) as ContentCatalogProvider;
-            if(ccp != null)
+            if (ccp != null)
                 ccp.DisableCatalogUpdateOnStart = false;
 
             m_DepOp = m_Addressables.ResourceManager.CreateGroupOperation<string>(locations);
             return m_Addressables.ResourceManager.StartOperation(this, m_DepOp);
+        }
+
+        /// <inheritdoc />
+        protected override bool InvokeWaitForCompletion()
+        {
+            if (IsDone)
+                return true;
+            if (m_DepOp.IsValid() && !m_DepOp.IsDone)
+                m_DepOp.WaitForCompletion();
+
+            m_RM?.Update(Time.unscaledDeltaTime);
+
+            if (!HasExecuted)
+                InvokeExecute();
+
+            m_RM?.Update(Time.unscaledDeltaTime);
+            return IsDone;
         }
 
         protected override void Destroy()
@@ -67,5 +84,4 @@ namespace UnityEngine.AddressableAssets
             Complete(result, true, null);
         }
     }
-
 }

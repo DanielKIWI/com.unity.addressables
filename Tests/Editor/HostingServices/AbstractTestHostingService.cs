@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using UnityEditor.AddressableAssets.HostingServices;
 using UnityEditor.AddressableAssets.Settings;
@@ -27,6 +27,10 @@ namespace UnityEditor.AddressableAssets.Tests.HostingServices
         }
 
         public virtual void StopHostingService()
+        {
+        }
+
+        public virtual void CloseHostingService()
         {
         }
 

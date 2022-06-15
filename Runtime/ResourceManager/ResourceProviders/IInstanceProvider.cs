@@ -38,9 +38,9 @@ namespace UnityEngine.ResourceManagement.ResourceProviders
         public bool SetPositionRotation { get { return m_SetPositionRotation; } }
         /// <summary>
         /// Create a new InstantationParameters class that will set the parent transform and use the prefab transform.
+        /// </summary>
         /// <param name="parent">Transform to set as the parent of the instantiated object.</param>
         /// <param name="instantiateInWorldSpace">Flag to tell the IInstanceProvider whether to set the position and rotation on new instances.</param>
-        /// </summary>
         public InstantiationParameters(Transform parent, bool instantiateInWorldSpace)
         {
             m_Position = Vector3.zero;
@@ -49,12 +49,13 @@ namespace UnityEngine.ResourceManagement.ResourceProviders
             m_InstantiateInWorldPosition = instantiateInWorldSpace;
             m_SetPositionRotation = false;
         }
+
         /// <summary>
         /// Create a new InstantationParameters class that will set the position, rotation, and Transform parent of the instance.
+        /// </summary>
         /// <param name="position">Position relative to the parent to set on the instance.</param>
         /// <param name="rotation">Rotation relative to the parent to set on the instance.</param>
         /// <param name="parent">Transform to set as the parent of the instantiated object.</param>
-        /// </summary>
         public InstantiationParameters(Vector3 position, Quaternion rotation, Transform parent)
         {
             m_Position = position;
@@ -66,10 +67,10 @@ namespace UnityEngine.ResourceManagement.ResourceProviders
 
         /// <summary>
         /// Instantiate an object with the parameters of this object.
-        /// <param name="source">Object to instantiate.</param>
-        /// <returns>Instantiated object.</returns>
-        /// <typeparam name="TObject">Object type. This type must be of type UnityEngine.Object.</typeparam>
         /// </summary>
+        /// <typeparam name="TObject">Object type. This type must be of type UnityEngine.Object.</typeparam>
+        /// <param name="source">Object to instantiate.</param>
+        /// <returns>Returns the instantiated object.</returns>
         public TObject Instantiate<TObject>(TObject source) where TObject : Object
         {
             TObject result;
@@ -90,7 +91,7 @@ namespace UnityEngine.ResourceManagement.ResourceProviders
             return result;
         }
     }
-    
+
     /// <summary>
     /// Interface that provides instances of objects.  This is used in ResourceManager.Instantiate* calls.
     /// </summary>
@@ -99,6 +100,7 @@ namespace UnityEngine.ResourceManagement.ResourceProviders
         /// <summary>
         /// Provide an instance of the gameobject contained in the prefabHandle.
         /// </summary>
+        /// <param name="resourceManager">The object that contains all the resource locations.</param>
         /// <param name="prefabHandle">The operation handle for the prefab to instantiate.</param>
         /// <param name="instantiateParameters">The parameters to use for instantation.</param>
         /// <returns>The instantiated object.</returns>
@@ -106,6 +108,7 @@ namespace UnityEngine.ResourceManagement.ResourceProviders
         /// <summary>
         /// Release an instance.
         /// </summary>
+        /// <param name="resourceManager">The object that contains all the resource locations.</param>
         /// <param name="instance">The instance to release.</param>
         void ReleaseInstance(ResourceManager resourceManager, GameObject instance);
     }

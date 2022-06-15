@@ -8,11 +8,17 @@ using UnityEngine.SceneManagement;
 namespace UnityEngine.ResourceManagement.ResourceProviders
 {
     /// <summary>
-    /// Flags for resource providers.
+    /// Options for resource provider behavior.
     /// </summary>
     public enum ProviderBehaviourFlags
     {
+        /// <summary>
+        /// Indicates that the provider does not have extra specified behavior.
+        /// </summary>
         None = 0,
+        /// <summary>
+        /// Indicates that the provider will still fulfill requests even with failed dependencies.
+        /// </summary>
         CanProvideWithFailedDependencies = 1
     }
 
@@ -94,7 +100,26 @@ namespace UnityEngine.ResourceManagement.ResourceProviders
         {
             InternalOp.SetProgressCallback(callback);
         }
-        
+
+        /// <summary>
+        /// Set the func for handling download progress requests.
+        /// </summary>
+        /// <param name="callback">The callback function.</param>
+        public void SetDownloadProgressCallbacks(Func<DownloadStatus> callback)
+        {
+            InternalOp.SetDownloadProgressCallback(callback);
+        }
+
+
+        /// <summary>
+        /// Set the func for handling a request to wait for the completion of the operation
+        /// </summary>
+        /// <param name="callback">The callback function.</param>
+        public void SetWaitForCompletionCallback(Func<bool> callback)
+        {
+            InternalOp.SetWaitForCompletionCallback(callback);
+        }
+
         /// <summary>
         /// Called to complete the operation.
         /// </summary>
@@ -144,7 +169,6 @@ namespace UnityEngine.ResourceManagement.ResourceProviders
         /// <summary>
         /// Release and/or unload the given resource location and asset
         /// </summary>
-        /// <returns><c>true</c>, if release was successful. <c>false</c> otherwise.</returns>
         /// <param name="location">Location to release.</param>
         /// <param name="asset">Asset to unload.</param>
         void Release(IResourceLocation location, object asset);

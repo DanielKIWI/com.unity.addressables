@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using UnityEditor.AddressableAssets.Settings;
 using UnityEngine;
 using UnityEngine.Serialization;
@@ -106,7 +106,7 @@ namespace UnityEditor.AddressableAssets
         {
             get
             {
-                if (s_DefaultSettingsObject == null && !EditorApplication.isUpdating && !EditorApplication.isCompiling)
+                if (s_DefaultSettingsObject == null)
                 {
                     AddressableAssetSettingsDefaultObject so;
                     if (EditorBuildSettings.TryGetConfigObject(kDefaultConfigObjectName, out so))
@@ -123,6 +123,7 @@ namespace UnityEditor.AddressableAssets
                             so.SetSettingsObject(s_DefaultSettingsObject);
                             AssetDatabase.CreateAsset(so, kDefaultConfigFolder + "/DefaultObject.asset");
                             EditorUtility.SetDirty(so);
+                            AddressableAssetUtility.OpenAssetIfUsingVCIntegration(kDefaultConfigFolder + "/DefaultObject.asset");
                             AssetDatabase.SaveAssets();
                             EditorBuildSettings.AddConfigObject(kDefaultConfigObjectName, so, true);
                         }
@@ -153,6 +154,7 @@ namespace UnityEditor.AddressableAssets
                 }
                 so.SetSettingsObject(s_DefaultSettingsObject);
                 EditorUtility.SetDirty(so);
+                AddressableAssetUtility.OpenAssetIfUsingVCIntegration(kDefaultConfigFolder + "/DefaultObject.asset");
                 AssetDatabase.SaveAssets();
             }
         }
@@ -168,6 +170,5 @@ namespace UnityEditor.AddressableAssets
                 Settings = AddressableAssetSettings.Create(kDefaultConfigFolder, kDefaultConfigAssetName, true, true);
             return Settings;
         }
-
     }
 }

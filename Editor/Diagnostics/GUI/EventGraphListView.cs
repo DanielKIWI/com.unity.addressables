@@ -9,7 +9,7 @@ namespace UnityEditor.AddressableAssets.Diagnostics.GUI
 {
     class EventGraphListView : TreeView
     {
-        class DataStreamEntry : TreeViewItem
+        internal class DataStreamEntry : TreeViewItem
         {
             public GUIContent Content { get; private set; }
             public EventDataSet Entry { get; private set; }
@@ -19,6 +19,8 @@ namespace UnityEditor.AddressableAssets.Diagnostics.GUI
                 Content = new GUIContent(dataSet.DisplayName);
             }
         }
+        
+        HashSet<int> m_HiddenEvents = new HashSet<int>();
         Dictionary<int, bool> m_MaximizedState = new Dictionary<int, bool>();
         Func<string, bool> m_FilterFunc;
         IComparer<EventDataSet> m_DataSetComparer;
@@ -42,7 +44,7 @@ namespace UnityEditor.AddressableAssets.Diagnostics.GUI
             }
         }
 
-        internal EventGraphListView(Func<EventDataSet> dsFunc,  TreeViewState tvs, MultiColumnHeaderState mchs, Func<string, bool> filter, IComparer<EventDataSet> dsComparer) : base(tvs, new MultiColumnHeader(mchs))
+        internal EventGraphListView(Func<EventDataSet> dsFunc, TreeViewState tvs, MultiColumnHeaderState mchs, Func<string, bool> filter, IComparer<EventDataSet> dsComparer) : base(tvs, new MultiColumnHeader(mchs))
         {
             m_GetRootDataSetAction = dsFunc;
             showBorder = true;
@@ -52,6 +54,8 @@ namespace UnityEditor.AddressableAssets.Diagnostics.GUI
             m_FilterFunc = filter;
             columnIndexForTreeFoldouts = 1;
         }
+
+        internal bool HasHiddenEvents => m_HiddenEvents.Count > 0;
 
         protected override TreeViewItem BuildRoot()
         {
@@ -70,7 +74,7 @@ namespace UnityEditor.AddressableAssets.Diagnostics.GUI
             List<EventDataSet> entries = new List<EventDataSet>();
             foreach (var e in root.Entry.Children)
             {
-                if (!e.HasDataAfterFrame(visibleStartTime))
+                if (!e.HasDataAfterFrame(visibleStartTime) || m_HiddenEvents.Contains(e.ObjectId))
                     continue;
                 if (m_FilterFunc(e.Graph))
                     entries.Add(e);
@@ -87,6 +91,29 @@ namespace UnityEditor.AddressableAssets.Diagnostics.GUI
             }
 
             return root;
+        }
+        
+        internal void UnhideAllHiddenEvents()
+        {
+            m_HiddenEvents.Clear();
+            Reload();
+        }
+
+        protected override void ContextClicked()
+        {
+            var selectedEventIds = GetSelection();
+            GenericMenu menu = new GenericMenu();
+            
+            menu.AddItem(new GUIContent("Hide Selected Event(s)"), false, HideSelectedEvents, selectedEventIds);
+            menu.ShowAsContext();
+        }
+        
+        void HideSelectedEvents(object context)
+        {
+            var selectedEventIds = (IList<int>)context;
+            if (selectedEventIds != null && selectedEventIds.Count > 0)
+                m_HiddenEvents.UnionWith(selectedEventIds);
+            Reload();
         }
 
         protected override float GetCustomRowHeight(int row, TreeViewItem item)
@@ -117,7 +144,6 @@ namespace UnityEditor.AddressableAssets.Diagnostics.GUI
             base.OnGUI(rect);
         }
 
-
         bool IsItemMaximized(int id)
         {
             bool expanded;
@@ -144,30 +170,30 @@ namespace UnityEditor.AddressableAssets.Diagnostics.GUI
             switch (column)
             {
                 case 0:
+                {
+                    var maximized = IsItemMaximized(item.id);
+                    if (UnityEngine.GUI.Button(cellRect, maximized ? m_MinusGUIContent : m_PlusGUIContent, EditorStyles.toolbarButton))
                     {
-                        var maximized = IsItemMaximized(item.id);
-                        if (UnityEngine.GUI.Button(cellRect, maximized ? m_MinusGUIContent : m_PlusGUIContent, EditorStyles.toolbarButton))
+                        if (!IsSelected(item.id))
                         {
-                            if (!IsSelected(item.id))
-                            {
-                                m_MaximizedState[item.id] = !maximized;
-                            }
-                            else
-                            {
-                                foreach (var i in GetSelection())
-                                    m_MaximizedState[i] = !maximized;
-                            }
-                            Reload();
-                            m_LastReloadTime = Time.unscaledTime;
+                            m_MaximizedState[item.id] = !maximized;
                         }
+                        else
+                        {
+                            foreach (var i in GetSelection())
+                                m_MaximizedState[i] = !maximized;
+                        }
+                        Reload();
+                        m_LastReloadTime = Time.unscaledTime;
                     }
-                    break;
+                }
+                break;
                 case 1:
-                    {
-                        cellRect.xMin += (GetContentIndent(item) + extraSpaceBeforeIconAndLabel);
-                        EditorGUI.LabelField(cellRect, item.Content);
-                    }
-                    break;
+                {
+                    cellRect.xMin += (GetContentIndent(item) + extraSpaceBeforeIconAndLabel);
+                    EditorGUI.LabelField(cellRect, item.Content);
+                }
+                break;
                 case 2:
                     DrawGraph(item.Entry, cellRect, visibleStartTime, visibleDuration, IsItemMaximized(item.id));
                     break;
@@ -179,7 +205,7 @@ namespace UnityEditor.AddressableAssets.Diagnostics.GUI
             ToggleItemMaximize(id);
             base.DoubleClickedItem(id);
         }
-
+        
         public void DefineGraph(string name, int maxValueStream, params IGraphLayer[] layers)
         {
             m_GraphDefinitions.Add(name, new GraphDefinition(maxValueStream, layers));
@@ -197,14 +223,14 @@ namespace UnityEditor.AddressableAssets.Diagnostics.GUI
 
             if (m_GraphMaterial == null)
             {
-                // best material options are "Unlit/Color" or "UI/Default". 
+                // best material options are "Unlit/Color" or "UI/Default".
                 //  Unlit/Color is more efficient, but does not support alpha
                 //  UI/Default does support alpha
                 m_GraphMaterial = new Material(Shader.Find("Unlit/Color"));
             }
 
             int maxValue = gd.GetMaxValue(dataSet);
-
+            
             foreach (var l in gd.layers)
                 l.Draw(dataSet, rect, startTime, duration, m_InspectFrame, expanded, m_GraphMaterial, maxValue);
         }

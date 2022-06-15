@@ -5,7 +5,7 @@ using UnityEngine.ResourceManagement.ResourceLocations;
 namespace UnityEngine.AddressableAssets.ResourceLocators
 {
     /// <summary>
-    /// Interface used by the Addressables system to find th locations of a given key.
+    /// Interface used by the Addressables system to find the locations of a given key.
     /// </summary>
     public interface IResourceLocator
     {
@@ -21,6 +21,7 @@ namespace UnityEngine.AddressableAssets.ResourceLocators
         /// Retrieve the locations from a specified key.
         /// </summary>
         /// <param name="key">The key to use.</param>
+        /// <param name="type">The resource type.</param>
         /// <param name="locations">The resulting set of locations for the key.</param>
         /// <returns>True if any locations were found with the specified key.</returns>
         bool Locate(object key, Type type, out IList<IResourceLocation> locations);

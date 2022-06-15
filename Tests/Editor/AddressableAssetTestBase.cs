@@ -12,7 +12,16 @@ namespace UnityEditor.AddressableAssets.Tests
     public abstract class AddressableAssetTestBase
     {
         protected const string k_TestConfigName = "AddressableAssetSettings.Tests";
-        protected const string k_TestConfigFolder = "Assets/AddressableAssetsData_AddressableAssetSettingsTests";
+
+        protected string TestFolder => $"Assets/{TestFolderName}";
+        protected string TestFolderName => $"{GetType()}_Tests";
+        protected string ConfigFolder => TestFolder + "/Config";
+        
+        
+        protected string GetAssetPath(string assetName)
+        {
+            return $"{TestFolder}/{assetName}";
+        }
 
         private AddressableAssetSettings m_Settings;
 
@@ -21,7 +30,7 @@ namespace UnityEditor.AddressableAssets.Tests
             get
             {
                 if (m_Settings == null)
-                    m_Settings = AddressableAssetSettings.Create(k_TestConfigFolder, k_TestConfigName, true, PersistSettings);
+                    m_Settings = AddressableAssetSettings.Create(ConfigFolder, k_TestConfigName, true, PersistSettings);
                 return m_Settings;
             }
         }
@@ -35,26 +44,29 @@ namespace UnityEditor.AddressableAssets.Tests
             //TODO: Remove when NSImage warning issue on bokken is fixed
             Application.logMessageReceived += CheckLogForWarning;
 
-            if (Directory.Exists(k_TestConfigFolder))
-                AssetDatabase.DeleteAsset(k_TestConfigFolder);
-            if (!Directory.Exists(k_TestConfigFolder))
+            if (Directory.Exists(TestFolder))
             {
-                Directory.CreateDirectory(k_TestConfigFolder);
-                AssetDatabase.Refresh();
+                Debug.Log($"{GetType()} (init) - deleting {TestFolder}");
+                if (!AssetDatabase.DeleteAsset(TestFolder))
+                    Directory.Delete(TestFolder);
             }
+            
+            Debug.Log($"{GetType()} (init) - creating {TestFolder}");
+            AssetDatabase.CreateFolder("Assets", TestFolderName);
+            AssetDatabase.CreateFolder(TestFolder, "Config");
 
             Settings.labelTable.labelNames.Clear();
             GameObject testObject = new GameObject("TestObject");
-#if UNITY_2018_3_OR_NEWER
-            PrefabUtility.SaveAsPrefabAsset(testObject, k_TestConfigFolder + "/test.prefab");
-#else
-            PrefabUtility.CreatePrefab(k_TestConfigFolder + "/test.prefab", testObject);
-#endif
-            m_AssetGUID = AssetDatabase.AssetPathToGUID(k_TestConfigFolder + "/test.prefab");
+            GameObject testObject1 = new GameObject("TestObject 1");
+            GameObject testObject2 = new GameObject("TestObject 2");
+            PrefabUtility.SaveAsPrefabAsset(testObject, TestFolder + "/test.prefab");
+            PrefabUtility.SaveAsPrefabAsset(testObject1, TestFolder + "/test 1.prefab");
+            PrefabUtility.SaveAsPrefabAsset(testObject2, TestFolder + "/test 2.prefab");
+            m_AssetGUID = AssetDatabase.AssetPathToGUID(TestFolder + "/test.prefab");
 
-            string scene1Path = k_TestConfigFolder + "/contentUpdateScene1.unity";
-            string scene2Path = k_TestConfigFolder + "/contentUpdateScene2.unity";
-            string scene3Path = k_TestConfigFolder + "/contentUpdateScene3.unity";
+            string scene1Path = TestFolder + "/contentUpdateScene1.unity";
+            string scene2Path = TestFolder + "/contentUpdateScene2.unity";
+            string scene3Path = TestFolder + "/contentUpdateScene3.unity";
 
             Scene scene1 = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene);
             EditorSceneManager.SaveScene(scene1, scene1Path);
@@ -78,7 +90,7 @@ namespace UnityEditor.AddressableAssets.Tests
             OnInit();
 
             //TODO: Remove when NSImage warning issue on bokken is fixed
-            //Removing here in the event we didn't recieve any messages during the setup, we can respond appropriately to 
+            //Removing here in the event we didn't recieve any messages during the setup, we can respond appropriately to
             //logs in the tests.
             Application.logMessageReceived -= CheckLogForWarning;
             if (resetFailingMessages)
@@ -93,19 +105,35 @@ namespace UnityEditor.AddressableAssets.Tests
             resetFailingMessages = true;
         }
 
-        protected virtual void OnInit() { }
+        protected virtual void OnInit() {}
 
         [OneTimeTearDown]
         public void Cleanup()
         {
             OnCleanup();
-            if (Directory.Exists(k_TestConfigFolder))
-                AssetDatabase.DeleteAsset(k_TestConfigFolder);
+            if (Directory.Exists(TestFolder))
+            {
+                Debug.Log($"{GetType()} - (cleanup) deleting {TestFolder}");
+                AssetDatabase.DeleteAsset(TestFolder);
+            }
             EditorBuildSettings.RemoveConfigObject(k_TestConfigName);
         }
 
         protected virtual void OnCleanup()
         {
+        }
+
+        protected string CreateAsset(string assetPath, string objectName = null)
+        {
+            GameObject go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            if (string.IsNullOrEmpty(objectName))
+                objectName = Path.GetFileNameWithoutExtension(assetPath);
+            go.name = objectName;
+            //this is to ensure that bundles are different for every run.
+            go.transform.localPosition = UnityEngine.Random.onUnitSphere;
+            PrefabUtility.SaveAsPrefabAsset(go, assetPath);
+            UnityEngine.Object.DestroyImmediate(go, false);
+            return AssetDatabase.AssetPathToGUID(assetPath);
         }
     }
 }

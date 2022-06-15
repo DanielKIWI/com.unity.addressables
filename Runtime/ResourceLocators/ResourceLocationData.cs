@@ -49,12 +49,39 @@ namespace UnityEngine.AddressableAssets.ResourceLocators
         /// </summary>
         public Type ResourceType { get { return m_ResourceType.Value; } }
 
+        [SerializeField]
+        byte[] SerializedData;
+        object _Data;
+        /// <summary>
+        /// The optional arbitrary data stored along with location
+        /// </summary>
+        public object Data
+        {
+            get
+            {
+                if (_Data == null)
+                {
+                    if (SerializedData == null || SerializedData.Length <= 0)
+                        return null;
+                    _Data = Utility.SerializationUtilities.ReadObjectFromByteArray(SerializedData, 0);
+                }
+                return _Data;
+            }
+            set
+            {
+                var tmp = new System.Collections.Generic.List<byte>();
+                Utility.SerializationUtilities.WriteObjectToByteList(value, tmp);
+                SerializedData = tmp.ToArray();
+            }
+        }
+        
         /// <summary>
         /// Construct a new ResourceLocationData object.
         /// </summary>
         /// <param name="keys">Array of keys for the location.  This must contain at least one item.</param>
         /// <param name="id">The internal id.</param>
         /// <param name="provider">The provider id.</param>
+        /// <param name="t">The resource object type.</param>
         /// <param name="dependencies">Optional array of dependencies.</param>
         public ResourceLocationData(string[] keys, string id, Type provider, Type t, string[] dependencies = null)
         {

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using UnityEditor.AddressableAssets.Build;
 using UnityEditor.AddressableAssets.Build.AnalyzeRules;
 using UnityEditor.AddressableAssets.Settings;
@@ -7,7 +7,7 @@ using UnityEngine;
 namespace UnityEditor.AddressableAssets.GUI
 {
     /// <summary>
-    /// Window used to execute AnalyzeRule sets.  
+    /// Window used to execute AnalyzeRule sets.
     /// </summary>
     public class AnalyzeWindow : EditorWindow
     {
@@ -21,12 +21,12 @@ namespace UnityEditor.AddressableAssets.GUI
                 return s_Instance;
             }
         }
-        
+
         private AddressableAssetSettings m_Settings;
 
         [SerializeField]
         private AnalyzeRuleGUI m_AnalyzeEditor;
-        
+
         private Rect displayAreaRect
         {
             get
@@ -51,25 +51,29 @@ namespace UnityEditor.AddressableAssets.GUI
 
         void OnEnable()
         {
-            if(m_AnalyzeEditor == null)
+            if (m_AnalyzeEditor == null)
                 m_AnalyzeEditor = new AnalyzeRuleGUI();
-
         }
 
-        void OnGUI() 
+        void OnGUI()
         {
+            AddressableAssetSettings settings = AddressableAssetSettingsDefaultObject.Settings;
+            if (settings == null)
+                return;
+
             GUILayout.BeginArea(displayAreaRect);
             m_AnalyzeEditor.OnGUI(displayAreaRect);
             GUILayout.EndArea();
         }
+
         /// <summary>
-        /// Obsolete - please use AnalyzeSystem.RegisterNewRule<TRule>()
+        /// Obsolete - please use AnalyzeSystem.RegisterNewRule&lt;TRule&gt;()
         /// </summary>
+        /// <typeparam name="TRule">The rule type.</typeparam>
         [Obsolete("Please use AnalyzeSystem.RegisterNewRule<TRule>()")]
         public static void RegisterNewRule<TRule>() where TRule : AnalyzeRule, new()
         {
             AnalyzeSystem.RegisterNewRule<TRule>();
         }
-
     }
 }

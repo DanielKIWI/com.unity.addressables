@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -8,13 +8,14 @@ namespace UnityEditor.AddressableAssets.Settings
     {
         internal static EditorBuildSettingsScene[] m_Scenes;
         static Dictionary<GUID, int> s_GUIDSceneIndexLookup;
+        static Dictionary<string, int> s_PathSceneIndexLookup;
         static bool s_IsListening;
         public static event Action sceneListChanged;
 
         internal static void ClearState(bool clearCallbacks = false)
         {
             InvalidateCache();
-            if(s_IsListening)
+            if (s_IsListening)
             {
                 EditorBuildSettings.sceneListChanged -= EditorBuildSettings_sceneListChanged;
                 s_IsListening = false;
@@ -49,14 +50,14 @@ namespace UnityEditor.AddressableAssets.Settings
         {
             get
             {
-                if(s_GUIDSceneIndexLookup == null)
+                if (s_GUIDSceneIndexLookup == null)
                 {
                     EditorBuildSettingsScene[] localScenes = scenes;
                     s_GUIDSceneIndexLookup = new Dictionary<GUID, int>();
                     int enabledIndex = 0;
                     for (int i = 0; i < scenes.Length; i++)
                     {
-                        if(localScenes[i] != null && localScenes[i].enabled)
+                        if (localScenes[i] != null && localScenes[i].enabled)
                             s_GUIDSceneIndexLookup[localScenes[i].guid] = enabledIndex++;
                     }
                 }
@@ -64,10 +65,30 @@ namespace UnityEditor.AddressableAssets.Settings
             }
         }
 
+        public static Dictionary<string, int> PathSceneIndexLookup
+        {
+            get
+            {
+                if (s_PathSceneIndexLookup == null)
+                {
+                    EditorBuildSettingsScene[] localScenes = scenes;
+                    s_PathSceneIndexLookup = new Dictionary<string, int>();
+                    int enabledIndex = 0;
+                    for (int i = 0; i < scenes.Length; i++)
+                    {
+                        if (localScenes[i] != null && localScenes[i].enabled)
+                            s_PathSceneIndexLookup[localScenes[i].path] = enabledIndex++;
+                    }
+                }
+                return s_PathSceneIndexLookup;
+            }
+        }
+
         private static void InvalidateCache()
         {
             m_Scenes = null;
             s_GUIDSceneIndexLookup = null;
+            s_PathSceneIndexLookup = null;
         }
 
         public static int GetSceneIndex(GUID guid)
@@ -79,6 +100,11 @@ namespace UnityEditor.AddressableAssets.Settings
         public static bool Contains(GUID guid)
         {
             return GUIDSceneIndexLookup.ContainsKey(guid);
+        }
+
+        public static bool Contains(string path)
+        {
+            return PathSceneIndexLookup.ContainsKey(path);
         }
 
         public static bool GetSceneFromGUID(GUID guid, out EditorBuildSettingsScene outScene)
@@ -96,11 +122,8 @@ namespace UnityEditor.AddressableAssets.Settings
         private static void EditorBuildSettings_sceneListChanged()
         {
             InvalidateCache();
-            if(sceneListChanged != null)
+            if (sceneListChanged != null)
                 sceneListChanged();
         }
-
     }
-
-        
 }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using UnityEditor;
 using UnityEngine.AddressableAssets.ResourceLocators;
@@ -17,9 +18,9 @@ namespace UnityEngine.AddressableAssets
     /// Generic version of AssetReference class.  This should not be used directly as CustomPropertyDrawers do not support generic types.  Instead use the concrete derived classes such as AssetReferenceGameObject.
     /// </summary>
     /// <typeparam name="TObject"></typeparam>
+    [Serializable]
     public class AssetReferenceT<TObject> : AssetReference where TObject : Object
     {
-
         /// <summary>
         /// Construct a new AssetReference object.
         /// </summary>
@@ -30,6 +31,9 @@ namespace UnityEngine.AddressableAssets
 
         /// <summary>
         /// Load the referenced asset as type TObject.
+        /// This cannot be used a second time until the first load is released. If you wish to call load multiple times
+        /// on an AssetReference, use <see cref="Addressables.LoadAssetAsync{TObject}(object)"/> and pass your AssetReference in as the key.
+        /// See the [Loading Addressable Assets](xref:addressables-api-load-asset-async) documentation for more details.
         /// </summary>
         /// <returns>The load operation.</returns>
         //[Obsolete("We have added Async to the name of all asycn methods (UnityUpgradable) -> LoadAssetAsync(*)", true)]
@@ -41,34 +45,45 @@ namespace UnityEngine.AddressableAssets
 
         /// <summary>
         /// Load the referenced asset as type TObject.
+        /// This cannot be used a second time until the first load is released. If you wish to call load multiple times
+        /// on an AssetReference, use<see cref="Addressables.LoadAssetAsync{TObject}(object)"/> and pass your AssetReference in as the key.
+        /// See the [Loading Addressable Assets](xref:addressables-api-load-asset-async) documentation for more details.
         /// </summary>
         /// <returns>The load operation.</returns>
         public virtual AsyncOperationHandle<TObject> LoadAssetAsync()
         {
             return LoadAssetAsync<TObject>();
         }
-        
+
         /// <inheritdoc/>
         public override bool ValidateAsset(Object obj)
         {
             var type = obj.GetType();
             return typeof(TObject).IsAssignableFrom(type);
         }
-        
-        /// <inheritdoc/>
-        public override bool ValidateAsset(string path)
+
+        /// <summary>
+        /// Validates that the asset located at a path is allowable for this asset reference. An asset is allowable if
+        /// it is of the correct type or if one of its sub-asset is.
+        /// </summary>
+        /// <param name="mainAssetPath">The path to the asset in question.</param>
+        /// <returns>Whether the referenced asset is valid.</returns>
+        public override bool ValidateAsset(string mainAssetPath)
         {
 #if UNITY_EDITOR
-            var type = AssetDatabase.GetMainAssetTypeAtPath(path);
-            return typeof(TObject).IsAssignableFrom(type);
+            if (typeof(TObject).IsAssignableFrom(AssetDatabase.GetMainAssetTypeAtPath(mainAssetPath)))
+                return true;
+            
+            var repr = AssetDatabase.LoadAllAssetRepresentationsAtPath(mainAssetPath);
+            return repr != null && repr.Any(o => o is TObject);
 #else
             return false;
 #endif
         }
-                
+
 #if UNITY_EDITOR
         /// <summary>
-        /// Type-specific override of parent editorAsset.  Used by the editor to represent the asset referenced.
+        /// Type-specific override of parent editorAsset.  Used by the editor to represent the main asset referenced.
         /// </summary>
         /// <returns>Editor Asset as type TObject, else null</returns>
         public new TObject editorAsset
@@ -77,14 +92,12 @@ namespace UnityEngine.AddressableAssets
             {
                 Object baseAsset = base.editorAsset;
                 TObject asset = baseAsset as TObject;
-                if( asset == null && baseAsset != null )
-                    Debug.Log( "editorAsset cannot cast to " + typeof(TObject) );
+                if (asset == null && baseAsset != null)
+                    Debug.Log("editorAsset cannot cast to " + typeof(TObject));
                 return asset;
             }
         }
 #endif
-
-        
     }
 
     /// <summary>
@@ -93,7 +106,11 @@ namespace UnityEngine.AddressableAssets
     [Serializable]
     public class AssetReferenceGameObject : AssetReferenceT<GameObject>
     {
-        public AssetReferenceGameObject(string guid) : base(guid) { }
+        /// <summary>
+        /// Constructs a new reference to a GameObject.
+        /// </summary>
+        /// <param name="guid">The object guid.</param>
+        public AssetReferenceGameObject(string guid) : base(guid) {}
     }
     /// <summary>
     /// Texture only asset reference.
@@ -101,7 +118,11 @@ namespace UnityEngine.AddressableAssets
     [Serializable]
     public class AssetReferenceTexture : AssetReferenceT<Texture>
     {
-        public AssetReferenceTexture(string guid) : base(guid) { }
+        /// <summary>
+        /// Constructs a new reference to a Texture.
+        /// </summary>
+        /// <param name="guid">The object guid.</param>
+        public AssetReferenceTexture(string guid) : base(guid) {}
     }
     /// <summary>
     /// Texture2D only asset reference.
@@ -109,7 +130,11 @@ namespace UnityEngine.AddressableAssets
     [Serializable]
     public class AssetReferenceTexture2D : AssetReferenceT<Texture2D>
     {
-        public AssetReferenceTexture2D(string guid) : base(guid) { }
+        /// <summary>
+        /// Constructs a new reference to a Texture2D.
+        /// </summary>
+        /// <param name="guid">The object guid.</param>
+        public AssetReferenceTexture2D(string guid) : base(guid) {}
     }
     /// <summary>
     /// Texture3D only asset reference
@@ -117,7 +142,11 @@ namespace UnityEngine.AddressableAssets
     [Serializable]
     public class AssetReferenceTexture3D : AssetReferenceT<Texture3D>
     {
-        public AssetReferenceTexture3D(string guid) : base(guid) { }
+        /// <summary>
+        /// Constructs a new reference to a Texture3D.
+        /// </summary>
+        /// <param name="guid">The object guid.</param>
+        public AssetReferenceTexture3D(string guid) : base(guid) {}
     }
 
     /// <summary>
@@ -126,7 +155,11 @@ namespace UnityEngine.AddressableAssets
     [Serializable]
     public class AssetReferenceSprite : AssetReferenceT<Sprite>
     {
-        public AssetReferenceSprite(string guid) : base(guid) { }
+        /// <summary>
+        /// Constructs a new reference to a AssetReferenceSprite.
+        /// </summary>
+        /// <param name="guid">The object guid.</param>
+        public AssetReferenceSprite(string guid) : base(guid) {}
 
         /// <inheritdoc/>
         public override bool ValidateAsset(string path)
@@ -145,10 +178,10 @@ namespace UnityEngine.AddressableAssets
 #endif
             return false;
         }
-        
+
 #if UNITY_EDITOR
         /// <summary>
-        /// Typeless override of parent editorAsset. Used by the editor to represent the asset referenced.
+        /// Typeless override of parent editorAsset. Used by the editor to represent the main asset referenced.
         /// </summary>
         public new Object editorAsset
         {
@@ -156,21 +189,31 @@ namespace UnityEngine.AddressableAssets
             {
                 if (CachedAsset != null || string.IsNullOrEmpty(AssetGUID))
                     return CachedAsset;
-                
+
                 var prop = typeof(AssetReference).GetProperty("editorAsset");
                 return prop.GetValue(this, null) as Object;
             }
         }
 #endif
     }
-    
+
     /// <summary>
     /// Assetreference that only allows atlassed sprites.
     /// </summary>
     [Serializable]
     public class AssetReferenceAtlasedSprite : AssetReferenceT<Sprite>
     {
-        public AssetReferenceAtlasedSprite(string guid) : base(guid) { }
+        /// <summary>
+        /// Constructs a new reference to a AssetReferenceAtlasedSprite.
+        /// </summary>
+        /// <param name="guid">The object guid.</param>
+        public AssetReferenceAtlasedSprite(string guid) : base(guid) {}
+
+        /// <inheritdoc/>
+        public override bool ValidateAsset(Object obj)
+        {
+            return obj is SpriteAtlas;
+        }
 
         /// <inheritdoc/>
         public override bool ValidateAsset(string path)
@@ -181,10 +224,10 @@ namespace UnityEngine.AddressableAssets
             return false;
 #endif
         }
-        
+
 #if UNITY_EDITOR
         /// <summary>
-        /// SpriteAtlas Type-specific override of parent editorAsset. Used by the editor to represent the asset referenced.
+        /// SpriteAtlas Type-specific override of parent editorAsset. Used by the editor to represent the main asset referenced.
         /// </summary>
         public new SpriteAtlas editorAsset
         {
@@ -192,7 +235,7 @@ namespace UnityEngine.AddressableAssets
             {
                 if (CachedAsset != null || string.IsNullOrEmpty(AssetGUID))
                     return CachedAsset as SpriteAtlas;
-                
+
                 var assetPath = AssetDatabase.GUIDToAssetPath(AssetGUID);
                 var main = AssetDatabase.LoadMainAssetAtPath(assetPath) as SpriteAtlas;
                 if (main != null)
@@ -205,7 +248,7 @@ namespace UnityEngine.AddressableAssets
 
     /// <summary>
     /// Reference to an addressable asset.  This can be used in script to provide fields that can be easily set in the editor and loaded dynamically at runtime.
-    /// To determine if the reference is set, use RuntimeKeyIsValid().  
+    /// To determine if the reference is set, use RuntimeKeyIsValid().
     /// </summary>
     [Serializable]
     public class AssetReference : IKeyEvaluator
@@ -215,8 +258,22 @@ namespace UnityEngine.AddressableAssets
         string m_AssetGUID = "";
         [SerializeField]
         string m_SubObjectName;
+        [SerializeField]
+        string m_SubObjectType = null;
 
         AsyncOperationHandle m_Operation;
+        /// <summary>
+        /// The AsyncOperationHandle currently being used by the AssetReference.
+        /// For example, if you call AssetReference.LoadAssetAsync, this property will return a handle to that operation.
+        /// </summary>
+        public AsyncOperationHandle OperationHandle
+        {
+            get
+            {
+                return m_Operation;
+            }
+        }
+
         /// <summary>
         /// The actual key used to request the asset at runtime. RuntimeKeyIsValid() can be used to determine if this reference was set.
         /// </summary>
@@ -232,10 +289,24 @@ namespace UnityEngine.AddressableAssets
             }
         }
 
+        /// <summary>
+        /// Stores the guid of the asset.
+        /// </summary>
         public virtual string AssetGUID { get { return m_AssetGUID; } }
+
+        /// <summary>
+        /// Stores the name of the sub object.
+        /// </summary>
         public virtual string SubObjectName { get { return m_SubObjectName; } set { m_SubObjectName = value; } }
-
-
+        internal virtual Type SubOjbectType
+        {
+            get
+            {
+                if (!string.IsNullOrEmpty(m_SubObjectName) && m_SubObjectType != null)
+                    return Type.GetType(m_SubObjectType);
+                return null;
+            }
+        }
         /// <summary>
         /// Returns the state of the internal operation.
         /// </summary>
@@ -261,6 +332,10 @@ namespace UnityEngine.AddressableAssets
         /// </summary>
         public AssetReference()
         {
+#if UNITY_EDITOR && UNITY_2019_3_OR_NEWER
+            EditorApplication.playModeStateChanged -= ReleaseHandleWhenPlaymodeStateChanged;
+            EditorApplication.playModeStateChanged += ReleaseHandleWhenPlaymodeStateChanged;
+#endif
         }
 
         /// <summary>
@@ -270,10 +345,26 @@ namespace UnityEngine.AddressableAssets
         public AssetReference(string guid)
         {
             m_AssetGUID = guid;
+#if UNITY_EDITOR && UNITY_2019_3_OR_NEWER
+            EditorApplication.playModeStateChanged -= ReleaseHandleWhenPlaymodeStateChanged;
+            EditorApplication.playModeStateChanged += ReleaseHandleWhenPlaymodeStateChanged;
+#endif
         }
 
+#if UNITY_EDITOR && UNITY_2019_3_OR_NEWER
+        void ReleaseHandleWhenPlaymodeStateChanged(PlayModeStateChange state)
+        {
+            if (EditorSettings.enterPlayModeOptionsEnabled && Addressables.reinitializeAddressables)
+            {
+                while (OperationHandle.IsValid())
+                    OperationHandle.Release();
+            }
+        }
+#endif
+
         /// <summary>
-        /// The loaded asset.  This value is only set after the AsyncOperationHandle returned from LoadAssetAsync completes.  It will not be set if only InstantiateAsync is called.  It will be set to null if release is called.
+        /// The loaded asset.  This value is only set after the AsyncOperationHandle returned from LoadAssetAsync completes.
+        /// It will not be set if only InstantiateAsync is called.  It will be set to null if release is called.
         /// </summary>
         public virtual Object Asset
         {
@@ -288,14 +379,27 @@ namespace UnityEngine.AddressableAssets
 
 #if UNITY_EDITOR
         Object m_CachedAsset;
-        
+        string m_CachedGUID = "";
+
         /// <summary>
         /// Cached Editor Asset.
         /// </summary>
         protected Object CachedAsset
         {
-            get { return m_CachedAsset; }
-            set { m_CachedAsset = value; }
+            get
+            {
+                if (m_CachedGUID != m_AssetGUID)
+                {
+                    m_CachedAsset = null;
+                    m_CachedGUID = "";
+                }
+                return m_CachedAsset;
+            }
+            set
+            {
+                m_CachedAsset = value;
+                m_CachedGUID = m_AssetGUID;
+            }
         }
 #endif
         /// <summary>
@@ -305,14 +409,24 @@ namespace UnityEngine.AddressableAssets
         public override string ToString()
         {
 #if UNITY_EDITOR
-            return "[" + m_AssetGUID + "]" + m_CachedAsset;
+            return "[" + m_AssetGUID + "]" + CachedAsset;
 #else
             return "[" + m_AssetGUID + "]";
 #endif
         }
 
+        static AsyncOperationHandle<T> CreateFailedOperation<T>()
+        {
+            //this needs to be set in order for ResourceManager.ExceptionHandler to get hooked up to AddressablesImpl.LogException.
+            Addressables.InitializeAsync();
+            return Addressables.ResourceManager.CreateCompletedOperation(default(T), new Exception("Attempting to load an asset reference that has no asset assigned to it.").Message);
+        }
+
         /// <summary>
         /// Load the referenced asset as type TObject.
+        /// This cannot be used a second time until the first load is released. If you wish to call load multiple times
+        /// on an AssetReference, use <see cref="Addressables.LoadAssetAsync{TObject}(object)"/> and pass your AssetReference in as the key.
+        /// See the [Loading Addressable Assets](xref:addressables-api-load-asset-async) documentation for more details.
         /// </summary>
         /// <typeparam name="TObject">The object type.</typeparam>
         /// <returns>The load operation.</returns>
@@ -325,22 +439,29 @@ namespace UnityEngine.AddressableAssets
 
         /// <summary>
         /// Loads the reference as a scene.
+        /// This cannot be used a second time until the first load is released. If you wish to call load multiple times
+        /// on an AssetReference, use <see cref="Addressables.LoadAssetAsync{TObject}(object)"/> and pass your AssetReference in as the key.
+        /// See the [Loading Addressable Assets](xref:addressables-api-load-asset-async) documentation for more details.
         /// </summary>
         /// <returns>The operation handle for the scene load.</returns>
-        //[Obsolete("We have added Async to the name of all asycn methods (UnityUpgradable) -> LoadSceneAsync(*)", true)]
+        //[Obsolete("We have added Async to the name of all asynchronous methods (UnityUpgradable) -> LoadSceneAsync(*)", true)]
         [Obsolete]
         public AsyncOperationHandle<SceneInstance> LoadScene()
         {
             return LoadSceneAsync();
         }
+
         /// <summary>
         /// InstantiateAsync the referenced asset as type TObject.
+        /// This cannot be used a second time until the first load is released. If you wish to call load multiple times
+        /// on an AssetReference, use Addressables.InstantiateAsync() and pass your AssetReference in as the key.
+        /// See the [Loading Addressable Assets](xref:addressables-api-load-asset-async) documentation for more details.
         /// </summary>
         /// <param name="position">Position of the instantiated object.</param>
         /// <param name="rotation">Rotation of the instantiated object.</param>
         /// <param name="parent">The parent of the instantiated object.</param>
-        /// <returns></returns>
-        //[Obsolete("We have added Async to the name of all asycn methods (UnityUpgradable) -> InstantiateAsync(*)", true)]
+        /// <returns>Returns the instantiation operation.</returns>
+        //[Obsolete("We have added Async to the name of all asynchronous methods (UnityUpgradable) -> InstantiateAsync(*)", true)]
         [Obsolete]
         public AsyncOperationHandle<GameObject> Instantiate(Vector3 position, Quaternion rotation, Transform parent = null)
         {
@@ -349,12 +470,14 @@ namespace UnityEngine.AddressableAssets
 
         /// <summary>
         /// InstantiateAsync the referenced asset as type TObject.
+        /// This cannot be used a second time until the first load is released. If you wish to call load multiple times
+        /// on an AssetReference, use Addressables.InstantiateAsync() and pass your AssetReference in as the key.
+        /// See the [Loading Addressable Assets](xref:addressables-api-load-asset-async) documentation for more details.
         /// </summary>
-        /// <typeparam name="TObject">The object type.</typeparam>
         /// <param name="parent">The parent of the instantiated object.</param>
         /// <param name="instantiateInWorldSpace">Option to retain world space when instantiated with a parent.</param>
-        /// <returns></returns>
-        //[Obsolete("We have added Async to the name of all asycn methods (UnityUpgradable) -> InstantiateAsync(*)", true)]
+        /// <returns>Returns the instantiation operation.</returns>
+        //[Obsolete("We have added Async to the name of all asynchronous methods (UnityUpgradable) -> InstantiateAsync(*)", true)]
         [Obsolete]
         public AsyncOperationHandle<GameObject> Instantiate(Transform parent = null, bool instantiateInWorldSpace = false)
         {
@@ -363,30 +486,48 @@ namespace UnityEngine.AddressableAssets
 
         /// <summary>
         /// Load the referenced asset as type TObject.
+        /// This cannot be used a second time until the first load is released. If you wish to call load multiple times
+        /// on an AssetReference, use <see cref="Addressables.LoadAssetAsync{TObject}(object)"/> and pass your AssetReference in as the key.
+        /// See the [Loading Addressable Assets](xref:addressables-api-load-asset-async) documentation for more details.
         /// </summary>
         /// <typeparam name="TObject">The object type.</typeparam>
-        /// <returns>The load operation.</returns>
+        /// <returns>The load operation if there is not a valid cached operation, otherwise return default operation.</returns>
         public virtual AsyncOperationHandle<TObject> LoadAssetAsync<TObject>()
         {
-            AsyncOperationHandle<TObject> result = Addressables.LoadAssetAsync<TObject>(RuntimeKey);
-            m_Operation = result;
+            AsyncOperationHandle<TObject> result = default(AsyncOperationHandle<TObject>);
+            if (m_Operation.IsValid())
+                Debug.LogError("Attempting to load AssetReference that has already been loaded. Handle is exposed through getter OperationHandle");
+            else
+            {
+                result = Addressables.LoadAssetAsync<TObject>(RuntimeKey);
+                m_Operation = result;
+            }
             return result;
         }
 
         /// <summary>
         /// Loads the reference as a scene.
+        /// This cannot be used a second time until the first load is unloaded. If you wish to call load multiple times
+        /// on an AssetReference, use Addressables.LoadSceneAsync() and pass your AssetReference in as the key.
+        /// See the [Loading Addressable Assets](xref:addressables-api-load-asset-async) documentation for more details.
         /// </summary>
         /// <param name="loadMode">Scene load mode.</param>
         /// <param name="activateOnLoad">If false, the scene will load but not activate (for background loading).  The SceneInstance returned has an Activate() method that can be called to do this at a later point.</param>
         /// <param name="priority">Async operation priority for scene loading.</param>
-        /// <returns>The operation handle for the request.</returns>
+        /// <returns>The operation handle for the request if there is not a valid cached operation, otherwise return default operation</returns>
         public virtual AsyncOperationHandle<SceneInstance> LoadSceneAsync(LoadSceneMode loadMode = LoadSceneMode.Single, bool activateOnLoad = true, int priority = 100)
         {
-
-            var result = Addressables.LoadSceneAsync(RuntimeKey, loadMode, activateOnLoad, priority);
-            m_Operation = result;
+            AsyncOperationHandle<SceneInstance> result = default(AsyncOperationHandle<SceneInstance>);
+            if (m_Operation.IsValid())
+                Debug.LogError("Attempting to load AssetReference Scene that has already been loaded. Handle is exposed through getter OperationHandle");
+            else
+            {
+                result = Addressables.LoadSceneAsync(RuntimeKey, loadMode, activateOnLoad, priority);
+                m_Operation = result;
+            }
             return result;
         }
+
         /// <summary>
         /// Unloads the reference as a scene.
         /// </summary>
@@ -395,8 +536,12 @@ namespace UnityEngine.AddressableAssets
         {
             return Addressables.UnloadSceneAsync(m_Operation, true);
         }
+
         /// <summary>
         /// InstantiateAsync the referenced asset as type TObject.
+        /// This cannot be used a second time until the first load is released. If you wish to call load multiple times
+        /// on an AssetReference, use Addressables.InstantiateAsync() and pass your AssetReference in as the key.
+        /// See the [Loading Addressable Assets](xref:addressables-api-load-asset-async) documentation for more details.
         /// </summary>
         /// <param name="position">Position of the instantiated object.</param>
         /// <param name="rotation">Rotation of the instantiated object.</param>
@@ -409,8 +554,10 @@ namespace UnityEngine.AddressableAssets
 
         /// <summary>
         /// InstantiateAsync the referenced asset as type TObject.
+        /// This cannot be used a second time until the first load is released. If you wish to call load multiple times
+        /// on an AssetReference, use Addressables.InstantiateAsync() and pass your AssetReference in as the key.
+        /// See the [Loading Addressable Assets](xref:addressables-api-load-asset-async) documentation for more details.
         /// </summary>
-        /// <typeparam name="TObject">The object type.</typeparam>
         /// <param name="parent">The parent of the instantiated object.</param>
         /// <param name="instantiateInWorldSpace">Option to retain world space when instantiated with a parent.</param>
         /// <returns></returns>
@@ -444,7 +591,6 @@ namespace UnityEngine.AddressableAssets
             m_Operation = default(AsyncOperationHandle);
         }
 
-
         /// <summary>
         /// Release an instantiated object.
         /// </summary>
@@ -463,7 +609,7 @@ namespace UnityEngine.AddressableAssets
         {
             return true;
         }
-        
+
         /// <summary>
         /// Validates that the referenced asset allowable for this asset reference.
         /// </summary>
@@ -476,37 +622,47 @@ namespace UnityEngine.AddressableAssets
 
 #if UNITY_EDITOR
 
+        [SerializeField]
+        #pragma warning disable CS0414
+        bool m_EditorAssetChanged;
+        #pragma warning restore CS0414
+        
         /// <summary>
-        /// Used by the editor to represent the asset referenced.
+        /// Used by the editor to represent the main asset referenced.
         /// </summary>
         public virtual Object editorAsset
         {
             get
             {
-                if (m_CachedAsset != null || string.IsNullOrEmpty(m_AssetGUID))
-                    return m_CachedAsset;
+                if (CachedAsset != null || string.IsNullOrEmpty(m_AssetGUID))
+                    return CachedAsset;
                 var assetPath = AssetDatabase.GUIDToAssetPath(m_AssetGUID);
                 var mainType = AssetDatabase.GetMainAssetTypeAtPath(assetPath);
-                return (m_CachedAsset = AssetDatabase.LoadAssetAtPath(assetPath, mainType));
+                return (CachedAsset = AssetDatabase.LoadAssetAtPath(assetPath, mainType));
             }
         }
         /// <summary>
-        /// Sets the asset on the AssetReference.  Only valid in the editor, this sets both the editorAsset attribute,
-        ///   and the internal asset GUID, which drives the RuntimeKey attribute.
+        /// Sets the main asset on the AssetReference.  Only valid in the editor, this sets both the editorAsset attribute,
+        ///   and the internal asset GUID, which drives the RuntimeKey attribute. If the reference uses a sub object,
+        ///   then it will load the editor asset during edit mode and load the sub object during runtime. For example, if
+        ///   the AssetReference is set to a sprite within a sprite atlas, the editorAsset is the atlas (loaded during edit mode)
+        ///   and the sub object is the sprite (loaded during runtime).
         /// <param name="value">Object to reference</param>
         /// </summary>
         public virtual bool SetEditorAsset(Object value)
         {
-            if(value == null)
+            if (value == null)
             {
-                m_CachedAsset = null;
+                CachedAsset = null;
                 m_AssetGUID = string.Empty;
                 m_SubObjectName = null;
+                m_EditorAssetChanged = true;
                 return true;
             }
 
-            if (m_CachedAsset != value)
+            if (CachedAsset != value)
             {
+                m_SubObjectName = null;
                 var path = AssetDatabase.GetAssetOrScenePath(value);
                 if (string.IsNullOrEmpty(path))
                 {
@@ -522,12 +678,13 @@ namespace UnityEngine.AddressableAssets
                 {
                     m_AssetGUID = AssetDatabase.AssetPathToGUID(path);
                     var mainAsset = AssetDatabase.LoadMainAssetAtPath(path);
-                    m_CachedAsset = mainAsset;
+                    CachedAsset = mainAsset;
                     if (value != mainAsset)
                         SetEditorSubObject(value);
                 }
             }
-            
+
+            m_EditorAssetChanged = true;
             return true;
         }
 
@@ -541,6 +698,8 @@ namespace UnityEngine.AddressableAssets
             if (value == null)
             {
                 m_SubObjectName = null;
+                m_SubObjectType = null;
+                m_EditorAssetChanged = true;
                 return true;
             }
 
@@ -557,20 +716,25 @@ namespace UnityEngine.AddressableAssets
                     return false;
                 }
                 m_SubObjectName = spriteName;
+                m_SubObjectType = typeof(Sprite).AssemblyQualifiedName;
+                m_EditorAssetChanged = true;
                 return true;
             }
 
             var subAssets = AssetDatabase.LoadAllAssetRepresentationsAtPath(AssetDatabase.GUIDToAssetPath(m_AssetGUID));
             foreach (var s in subAssets)
             {
-                if (s.name == value.name)
+                if (s.name == value.name && s.GetType() == value.GetType())
                 {
-                    m_SubObjectName = value.name;
+                    m_SubObjectName = s.name;
+                    m_SubObjectType = s.GetType().AssemblyQualifiedName;
+                    m_EditorAssetChanged = true;
                     return true;
                 }
             }
             return false;
         }
+
 #endif
     }
 }

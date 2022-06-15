@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
 using UnityEngine.AddressableAssets.ResourceLocators;
 using UnityEngine.AddressableAssets.ResourceProviders;
@@ -37,6 +37,22 @@ namespace UnityEngine.AddressableAssets
 
             m_DepOp = m_Addressables.ResourceManager.CreateGroupOperation<object>(locations);
             return m_Addressables.ResourceManager.StartOperation(this, m_DepOp);
+        }
+
+        /// <inheritdoc />
+        protected override bool InvokeWaitForCompletion()
+        {
+            if (IsDone)
+                return true;
+            if (m_DepOp.IsValid() && !m_DepOp.IsDone)
+                m_DepOp.WaitForCompletion();
+
+            m_RM?.Update(Time.unscaledDeltaTime);
+            if (!HasExecuted)
+                InvokeExecute();
+
+            m_Addressables.ResourceManager.Update(Time.unscaledDeltaTime);
+            return IsDone;
         }
 
         protected override void Destroy()

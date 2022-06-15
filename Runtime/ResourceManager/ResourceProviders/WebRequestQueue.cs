@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -8,12 +8,13 @@ namespace UnityEngine.ResourceManagement
 {
     internal class WebRequestQueueOperation
     {
+        private bool m_Completed = false;
         public UnityWebRequestAsyncOperation Result;
         public Action<UnityWebRequestAsyncOperation> OnComplete;
 
         public bool IsDone
         {
-            get { return Result != null; }
+            get { return m_Completed || Result != null; }
         }
 
         internal UnityWebRequest m_WebRequest;
@@ -25,6 +26,7 @@ namespace UnityEngine.ResourceManagement
 
         internal void Complete(UnityWebRequestAsyncOperation asyncOp)
         {
+            m_Completed = true;
             Result = asyncOp;
             OnComplete?.Invoke(Result);
         }
@@ -33,18 +35,38 @@ namespace UnityEngine.ResourceManagement
 
     internal static class WebRequestQueue
     {
-        private static int s_MaxRequest = 500;
+        internal static int s_MaxRequest = 500;
         internal static Queue<WebRequestQueueOperation> s_QueuedOperations = new Queue<WebRequestQueueOperation>();
         internal static List<UnityWebRequestAsyncOperation> s_ActiveRequests = new List<UnityWebRequestAsyncOperation>();
+        public static void SetMaxConcurrentRequests(int maxRequests)
+        {
+            if (maxRequests < 1)
+                throw new ArgumentException("MaxRequests must be 1 or greater.", "maxRequests");
+            s_MaxRequest = maxRequests;
+        }
 
         public static WebRequestQueueOperation QueueRequest(UnityWebRequest request)
         {
             WebRequestQueueOperation queueOperation = new WebRequestQueueOperation(request);
             if (s_ActiveRequests.Count < s_MaxRequest)
             {
-                var webRequestAsyncOp = request.SendWebRequest();
-                webRequestAsyncOp.completed += OnWebAsyncOpComplete;
-                s_ActiveRequests.Add(webRequestAsyncOp);
+                UnityWebRequestAsyncOperation webRequestAsyncOp = null;
+                try
+                {
+                    webRequestAsyncOp = request.SendWebRequest();
+                    s_ActiveRequests.Add(webRequestAsyncOp);
+
+                    if (webRequestAsyncOp.isDone)
+                        OnWebAsyncOpComplete(webRequestAsyncOp);
+                    else
+                        webRequestAsyncOp.completed += OnWebAsyncOpComplete;
+                    
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError(e.Message);
+                }
+                
                 queueOperation.Complete(webRequestAsyncOp);
             }
             else

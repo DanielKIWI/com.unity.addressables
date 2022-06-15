@@ -1,15 +1,30 @@
-﻿using NUnit.Framework;
+using NUnit.Framework;
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.ResourceManagement.AsyncOperations;
 using UnityEngine.ResourceManagement.ResourceLocations;
 using UnityEngine.ResourceManagement.ResourceProviders;
-using UnityEngine.ResourceManagement.Util;
 
 namespace UnityEngine.ResourceManagement.Tests
 {
+    internal class ManualPercentCompleteOperation : AsyncOperationBase<GameObject>
+    {
+        public ManualPercentCompleteOperation(float percentComplete)
+        {
+            m_PercentComplete = percentComplete;
+        }
+
+        public float m_PercentComplete;
+
+        protected override void Execute()
+        {
+            Complete(new GameObject(), true, "");
+        }
+
+        protected override float Progress => m_PercentComplete;
+    }
+
     public class ProviderOperationTests
     {
         MockProvider m_Provider;
@@ -40,6 +55,7 @@ namespace UnityEngine.ResourceManagement.Tests
         {
             m_RM = new ResourceManager();
             m_RM.CallbackHooksEnabled = false;
+            m_RM.postProfilerEvents = true;
 
             m_Provider = new MockProvider();
             m_Provider.ProvideCallback = ProvideBasicCallback;
@@ -95,7 +111,7 @@ namespace UnityEngine.ResourceManagement.Tests
             Assert.AreEqual(AsyncOperationStatus.Succeeded, op2.Status);
 
             // decrement the first op. the second op should still be holding the dependency
-            op1.Release(); 
+            op1.Release();
             Assert.AreEqual(0, m_Provider2.ReleaseLog.Count);
 
             // decrement the second op. the dependency should now have been released
@@ -146,7 +162,7 @@ namespace UnityEngine.ResourceManagement.Tests
             bool callbackCalled = false;
             Assert.AreEqual(AsyncOperationStatus.None, op.Status);
             op.Completed += x => callbackCalled = true;
-            
+
             // mark dependency complete
             depHandle.Complete(1, true, null);
             Assert.IsTrue(callbackCalled);
@@ -203,21 +219,37 @@ namespace UnityEngine.ResourceManagement.Tests
             op.Release();
         }
 
-        class Type1 { }
-        class Type2 { }
+        [Test]
+        public void ProviderOperation_PercentComplete_DoesNotDecreaseAfterPercentCallbackIsSet()
+        {
+            var providerOp = new ProviderOperation<GameObject>();
+            providerOp.m_DepOp = new AsyncOperationHandle<IList<AsyncOperationHandle>>();
+            providerOp.m_DepOp.m_InternalOp = new ProviderOperation<IList<AsyncOperationHandle>>();
+            providerOp.m_DepOp.m_InternalOp.Result = new List<AsyncOperationHandle>();
+            providerOp.m_DepOp.m_InternalOp.Result.Add(new ManualPercentCompleteOperation(1.0f).Handle);
+
+            Assert.AreEqual(0.5f, providerOp.PercentComplete);
+
+            providerOp.SetProgressCallback(() => 0.5f);
+
+            Assert.AreEqual(0.75f, providerOp.PercentComplete);
+        }
+
+        class Type1 {}
+        class Type2 {}
 
         [Test]
         public void WhenProviderCallsComplete_AndTypeIsIncorrect_Throws()
         {
             ResourceLocationBase loc = new ResourceLocationBase("1", "1", m_Provider.ProviderId, typeof(object));
             Exception testException = null;
-            m_Provider.ProvideCallback = (x) => 
+            m_Provider.ProvideCallback = (x) =>
             {
                 try
                 {
                     x.Complete(new Type2(), true, null);
                 }
-                catch(Exception e)
+                catch (Exception e)
                 {
                     testException = e;
                 }
@@ -249,7 +281,7 @@ namespace UnityEngine.ResourceManagement.Tests
             ResourceLocationBase loc = new ResourceLocationBase("1", "1", m_Provider.ProviderId, typeof(object));
             ProvideHandle handle = new ProvideHandle();
             bool didThrow = false;
-            m_Provider.ProvideCallback = (x) => 
+            m_Provider.ProvideCallback = (x) =>
             {
                 handle = x;
                 handle.SetProgressCallback(() => { didThrow = true; throw new Exception("I have failed"); });
@@ -298,7 +330,8 @@ namespace UnityEngine.ResourceManagement.Tests
             Assert.True(op.IsDone);
             op.Release();
         }
-        class Type3 : Type2 { }
+
+        class Type3 : Type2 {}
 
         [Test]
         public void ProvideHandle_CompleteWithExactType_Succeeds()
@@ -330,7 +363,6 @@ namespace UnityEngine.ResourceManagement.Tests
             ProviderCompleteTypeTest<Type2, Type1>(new Type1(), "Failed");
         }
 
-
         [Test]
         public void ProvideResource_WhenDependencyFailsToLoad_AndProviderCannotLoadWithFailedDependencies_ProvideNotCalled()
         {
@@ -347,7 +379,6 @@ namespace UnityEngine.ResourceManagement.Tests
         [Test]
         public void ProvideResource_WhenDependencyFailsToLoad_AndProviderCanLoadWithFailedDependencies_ProviderStillProvides()
         {
-
             m_Provider._BehaviourFlags = ProviderBehaviourFlags.CanProvideWithFailedDependencies;
             m_Provider.ProvideCallback = (pi) =>
             {
@@ -362,7 +393,7 @@ namespace UnityEngine.ResourceManagement.Tests
             Assert.AreEqual(5, op.Result);
             op.Release();
         }
-        
+
         [Test]
         public void ProvideResource_ReceiveDiagnosticsCallback_IGenericProviderOperationHasLocation()
         {
@@ -372,29 +403,29 @@ namespace UnityEngine.ResourceManagement.Tests
             };
             m_RM.ResourceProviders.Add(m_Provider);
             List<ResourceManager.DiagnosticEventContext> eventsRecieved = new List<ResourceManager.DiagnosticEventContext>();
-            m_RM.RegisterDiagnosticCallback( ctx =>
+            m_RM.RegisterDiagnosticCallback(ctx =>
             {
-                eventsRecieved.Add( ctx );
+                eventsRecieved.Add(ctx);
             });
-            
-            var locations = new ResourceLocationBase( "1", "1", m_Provider.ProviderId, typeof(object) );
+
+            var locations = new ResourceLocationBase("1", "1", m_Provider.ProviderId, typeof(object));
             AsyncOperationHandle<object> op = m_RM.ProvideResource<object>(locations);
-            
+
             m_RM.Update(0.0f);
             m_RM.ClearDiagnosticCallbacks();
-            
-            for( int i = 0; i < eventsRecieved.Count; ++i )
+
+            for (int i = 0; i < eventsRecieved.Count; ++i)
             {
-                if( eventsRecieved[i].OperationHandle.m_InternalOp is IGenericProviderOperation )
+                if (eventsRecieved[i].OperationHandle.m_InternalOp is IGenericProviderOperation)
                 {
-                    Assert.NotNull( eventsRecieved[i].Location );
-                    Assert.IsTrue( eventsRecieved[i].Location.InternalId == "1" );
+                    Assert.NotNull(eventsRecieved[i].Location);
+                    Assert.IsTrue(eventsRecieved[i].Location.InternalId == "1");
                 }
             }
-            
+
             op.Release();
         }
-        
+
         [Test]
         public void ProvideResource_ReceiveDiagnosticsCallback_CreateAndComplete()
         {
@@ -404,49 +435,49 @@ namespace UnityEngine.ResourceManagement.Tests
             };
             m_RM.ResourceProviders.Add(m_Provider);
             List<ResourceManager.DiagnosticEventContext> eventsRecieved = new List<ResourceManager.DiagnosticEventContext>();
-            m_RM.RegisterDiagnosticCallback( ctx =>
+            m_RM.RegisterDiagnosticCallback(ctx =>
             {
-                eventsRecieved.Add( ctx );
+                eventsRecieved.Add(ctx);
             });
-            
-            var locations = new ResourceLocationBase( "1", "1", m_Provider.ProviderId, typeof(object) );
+
+            var locations = new ResourceLocationBase("1", "1", m_Provider.ProviderId, typeof(object));
             AsyncOperationHandle<object> op = m_RM.ProvideResource<object>(locations);
-            
+
             m_RM.Update(0.0f);
             m_RM.ClearDiagnosticCallbacks();
 
             bool created = false;
             bool completed = false;
-            for( int i = 0; i < eventsRecieved.Count; ++i )
+            for (int i = 0; i < eventsRecieved.Count; ++i)
             {
-                if( eventsRecieved[i].Type == ResourceManager.DiagnosticEventType.AsyncOperationCreate )
+                if (eventsRecieved[i].Type == ResourceManager.DiagnosticEventType.AsyncOperationCreate)
                 {
-                    Assert.NotNull( eventsRecieved[i].Location );
-                    Assert.IsTrue( eventsRecieved[i].Location.InternalId == "1" );
-                    Assert.IsFalse( completed );
-                    Assert.IsFalse( created );
+                    Assert.NotNull(eventsRecieved[i].Location);
+                    Assert.IsTrue(eventsRecieved[i].Location.InternalId == "1");
+                    Assert.IsFalse(completed);
+                    Assert.IsFalse(created);
                     created = true;
                 }
-                else if( eventsRecieved[i].Type == ResourceManager.DiagnosticEventType.AsyncOperationComplete )
+                else if (eventsRecieved[i].Type == ResourceManager.DiagnosticEventType.AsyncOperationComplete)
                 {
-                    Assert.NotNull( eventsRecieved[i].Location );
-                    Assert.True( eventsRecieved[i].Location.InternalId == "1" );
-                    Assert.IsFalse( completed );
-                    Assert.IsTrue( created );
+                    Assert.NotNull(eventsRecieved[i].Location);
+                    Assert.True(eventsRecieved[i].Location.InternalId == "1");
+                    Assert.IsFalse(completed);
+                    Assert.IsTrue(created);
                     completed = true;
                 }
-                else if( eventsRecieved[i].Type == ResourceManager.DiagnosticEventType.AsyncOperationDestroy )
+                else if (eventsRecieved[i].Type == ResourceManager.DiagnosticEventType.AsyncOperationDestroy)
                 {
-                    Assert.NotNull( eventsRecieved[i].Location );
-                    Assert.True( eventsRecieved[i].Location.InternalId == "1" );
-                    Assert.IsTrue( completed );
-                    Assert.IsTrue( created );
+                    Assert.NotNull(eventsRecieved[i].Location);
+                    Assert.True(eventsRecieved[i].Location.InternalId == "1");
+                    Assert.IsTrue(completed);
+                    Assert.IsTrue(created);
                 }
             }
-            
+
             op.Release();
         }
-        
+
         [Test]
         public void ProvideResource_ReceiveDiagnosticsCallback_MultipleCallbacks()
         {
@@ -455,33 +486,33 @@ namespace UnityEngine.ResourceManagement.Tests
                 pi.Complete(int.Parse(pi.Location.InternalId), true, null);
             };
             m_RM.ResourceProviders.Add(m_Provider);
-            
+
             bool callback1 = false, callback2 = false;
-            m_RM.RegisterDiagnosticCallback( ctx => { callback1 = true; });
-            m_RM.RegisterDiagnosticCallback( ctx => { callback2 = true; });
-            
-            var locations = new ResourceLocationBase( "1", "1", m_Provider.ProviderId, typeof(object) );
+            m_RM.RegisterDiagnosticCallback(ctx => { callback1 = true; });
+            m_RM.RegisterDiagnosticCallback(ctx => { callback2 = true; });
+
+            var locations = new ResourceLocationBase("1", "1", m_Provider.ProviderId, typeof(object));
             AsyncOperationHandle<object> op = m_RM.ProvideResource<object>(locations);
-            
+
             m_RM.Update(0.0f);
             m_RM.ClearDiagnosticCallbacks();
-            
-            Assert.IsTrue( callback1 );
-            Assert.IsTrue( callback2 );
-            
+
+            Assert.IsTrue(callback1);
+            Assert.IsTrue(callback2);
+
             op.Release();
         }
 
         [Test]
         public void ProvideResources_CanLoadAndUnloadMultipleResources()
         {
-
             m_Provider.ProvideCallback = (pi) =>
             {
                 pi.Complete(int.Parse(pi.Location.InternalId), true, null);
             };
             m_RM.ResourceProviders.Add(m_Provider);
-            var locations = new List<IResourceLocation>() {
+            var locations = new List<IResourceLocation>()
+            {
                 new ResourceLocationBase("0", "0", m_Provider.ProviderId, typeof(object)),
                 new ResourceLocationBase("1", "1", m_Provider.ProviderId, typeof(object)),
             };
@@ -514,6 +545,128 @@ namespace UnityEngine.ResourceManagement.Tests
             Assert.AreSame(i2, loadOrder[1]);
             Assert.AreSame(i1, loadOrder[2]);
             op.Release();
+        }
+
+        [Test]
+        public void ProvideResource_WhenSomeDependenciesFail_SuccessfulDependenciesRelease()
+        {
+            ResourceLocationBase depLoc1 = new ResourceLocationBase("dep1", "dep1", "unknown provider", typeof(object));
+            ResourceLocationBase depLoc2 = new ResourceLocationBase("dep2", "dep2", m_Provider.ProviderId, typeof(object));
+            ResourceLocationBase loc = new ResourceLocationBase("1", "1", m_Provider.ProviderId, typeof(object), depLoc1, depLoc2);
+
+            var op = m_RM.ProvideResource<object>(loc);
+            m_RM.Update(0.0f);
+            Assert.AreEqual(AsyncOperationStatus.Failed, op.Status);
+            Assert.AreEqual(1, m_Provider.ProvideLog.Count);
+            Assert.AreEqual(1, m_Provider.ReleaseLog.Count);
+            Assert.IsNull(op.Result);
+        }
+
+        [Test]
+        public void ProvideResources_PartialSuccess_AllowsForSomeFailures()
+        {
+            ResourceLocationBase loc_a = new ResourceLocationBase("dep1", "dep1", "unknown provider", typeof(object));
+            ResourceLocationBase loc_b = new ResourceLocationBase("dep2", "dep2", m_Provider.ProviderId, typeof(object));
+
+            var op = m_RM.ProvideResources<object>(
+                new List<IResourceLocation> { loc_a, loc_b },
+                false,
+                null);
+            m_RM.Update(0.0f);
+            Assert.AreEqual(AsyncOperationStatus.Failed, op.Status);
+            Assert.AreEqual(1, m_Provider.ProvideLog.Count);
+            Assert.AreEqual(0, m_Provider.ReleaseLog.Count);
+            Assert.IsNotNull(op.Result);
+            Assert.AreEqual(2, op.Result.Count);
+            Assert.IsNull(op.Result[0]);
+            Assert.AreEqual("dep2", op.Result[1]);
+            op.Release();
+        }
+
+        [Test]
+        public void ProvideResources_ReleaseDependenciesOnFailure_DoesApplyToLocationDependencies()
+        {
+            ResourceLocationBase depLoc1a = new ResourceLocationBase("dep1a", "dep1a", "unknown provider", typeof(object));
+            ResourceLocationBase depLoc2a = new ResourceLocationBase("dep2a", "dep2a", m_Provider.ProviderId, typeof(object));
+            ResourceLocationBase loc_a = new ResourceLocationBase("1", "1", m_Provider.ProviderId, typeof(object), depLoc1a, depLoc2a);
+            ResourceLocationBase depLoc1b = new ResourceLocationBase("dep1b", "dep1b", "unknown provider", typeof(object));
+            ResourceLocationBase depLoc2b = new ResourceLocationBase("dep2b", "dep2b", m_Provider.ProviderId, typeof(object));
+            ResourceLocationBase loc_b = new ResourceLocationBase("2", "2", m_Provider.ProviderId, typeof(object), depLoc1b, depLoc2b);
+
+            var op = m_RM.ProvideResources<object>(new List<IResourceLocation> { loc_a, loc_b }, true, null);
+            m_RM.Update(0.0f);
+            Assert.AreEqual(AsyncOperationStatus.Failed, op.Status);
+            Assert.AreEqual(2, m_Provider.ProvideLog.Count);
+            Assert.AreEqual(2, m_Provider.ReleaseLog.Count);
+            Assert.IsNull(op.Result);
+        }
+
+        [Test]
+        public void ProvideResources_DoNotReleaseDependenciesOnFailure_DoesApplyToLocationDependencies()
+        {
+            ResourceLocationBase depLoc1a = new ResourceLocationBase("dep1a", "dep1a", "unknown provider", typeof(object));
+            ResourceLocationBase depLoc2a = new ResourceLocationBase("dep2a", "dep2a", m_Provider.ProviderId, typeof(object));
+            ResourceLocationBase loc_a = new ResourceLocationBase("1", "1", m_Provider.ProviderId, typeof(object), depLoc1a, depLoc2a);
+            ResourceLocationBase depLoc1b = new ResourceLocationBase("dep1b", "dep1b", "unknown provider", typeof(object));
+            ResourceLocationBase depLoc2b = new ResourceLocationBase("dep2b", "dep2b", m_Provider.ProviderId, typeof(object));
+            ResourceLocationBase loc_b = new ResourceLocationBase("2", "2", m_Provider.ProviderId, typeof(object), depLoc1b, depLoc2b);
+
+            var op = m_RM.ProvideResources<object>(new List<IResourceLocation> { loc_a, loc_b }, false, null);
+            m_RM.Update(0.0f);
+            Assert.AreEqual(AsyncOperationStatus.Failed, op.Status);
+            Assert.AreEqual(2, m_Provider.ProvideLog.Count);
+            Assert.AreEqual(0, m_Provider.ReleaseLog.Count);
+            Assert.IsNull(op.Result);
+
+            op.Release();
+        }
+
+        [Test]
+        public void ProvideResources_DoNotReleaseDependenciesOnFailure_ReleaseAllLocationsAfterCallingRelease()
+        {
+            ResourceLocationBase depLoc1a = new ResourceLocationBase("dep1a", "dep1a", "unknown provider", typeof(object));
+            ResourceLocationBase depLoc2a = new ResourceLocationBase("dep2a", "dep2a", m_Provider.ProviderId, typeof(object));
+            ResourceLocationBase loc_a = new ResourceLocationBase("1", "1", m_Provider.ProviderId, typeof(object), depLoc1a, depLoc2a);
+            ResourceLocationBase depLoc1b = new ResourceLocationBase("dep1b", "dep1b", "unknown provider", typeof(object));
+            ResourceLocationBase depLoc2b = new ResourceLocationBase("dep2b", "dep2b", m_Provider.ProviderId, typeof(object));
+            ResourceLocationBase loc_b = new ResourceLocationBase("2", "2", m_Provider.ProviderId, typeof(object), depLoc1b, depLoc2b);
+
+            var op = m_RM.ProvideResources<object>(new List<IResourceLocation> { loc_a, loc_b }, false, null);
+            m_RM.Update(0.0f);
+            Assert.AreEqual(AsyncOperationStatus.Failed, op.Status);
+            Assert.AreEqual(2, m_Provider.ProvideLog.Count);
+            Assert.AreEqual(0, m_Provider.ReleaseLog.Count);
+            Assert.IsNull(op.Result);
+
+            op.Release();
+
+            Assert.AreEqual(2, m_Provider.ReleaseLog.Count);
+        }
+
+        [Test]
+        public void ProvideResources_ReleaseDependenciesOnFailure_DoesNotOverReleaseAfterCallingRelease()
+        {
+            ResourceLocationBase depLoc1a = new ResourceLocationBase("dep1a", "dep1a", "unknown provider", typeof(object));
+            ResourceLocationBase depLoc2a = new ResourceLocationBase("dep2a", "dep2a", m_Provider.ProviderId, typeof(object));
+            ResourceLocationBase loc_a = new ResourceLocationBase("loc_a", "1", m_Provider.ProviderId, typeof(object), depLoc1a, depLoc2a);
+            ResourceLocationBase depLoc1b = new ResourceLocationBase("dep1b", "dep1b", "unknown provider", typeof(object));
+            ResourceLocationBase depLoc2b = new ResourceLocationBase("dep2b", "dep2b", m_Provider.ProviderId, typeof(object));
+            ResourceLocationBase loc_b = new ResourceLocationBase("loc_b", "2", m_Provider.ProviderId, typeof(object), depLoc1b, depLoc2b);
+            ResourceLocationBase loc_shared = new ResourceLocationBase("loc_shared", "3", m_Provider.ProviderId, typeof(object), depLoc2a);
+
+            var op_shared = m_RM.ProvideResources<object>(new List<IResourceLocation> { loc_shared }, true, null);
+            var op = m_RM.ProvideResources<object>(new List<IResourceLocation> { loc_a, loc_b }, true, null);
+            m_RM.Update(0.0f);
+
+            Assert.AreEqual(AsyncOperationStatus.Failed, op.Status);
+            Assert.AreEqual(AsyncOperationStatus.Succeeded, op_shared.Status);
+            Assert.AreEqual(3, m_Provider.ProvideLog.Count);
+            Assert.AreEqual(1, m_Provider.ReleaseLog.Count);
+            Assert.IsNull(op.Result);
+            op.Release();
+            Assert.AreEqual(1, m_Provider.ReleaseLog.Count);
+            op_shared.Release();
+            Assert.AreEqual(3, m_Provider.ReleaseLog.Count);
         }
     }
 }

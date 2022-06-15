@@ -30,7 +30,6 @@ namespace UnityEngine.ResourceManagement.Util
         /// <param name="data">Serialized data for the object.</param>
         /// <returns>Async operation</returns>
         AsyncOperationHandle<bool> InitializeAsync(ResourceManager rm, string id, string data);
-        
     }
 
 
@@ -65,6 +64,7 @@ namespace UnityEngine.ResourceManagement.Util
         /// <summary>
         /// Release an object.
         /// </summary>
+        /// <param name="typeHash">The hash code of the type.</param>
         /// <param name="obj">The object to release.</param>
         void Release(int typeHash, object obj);
     }
@@ -78,10 +78,10 @@ namespace UnityEngine.ResourceManagement.Util
         {
             return Activator.CreateInstance(type);
         }
+
         /// <inheritdoc/>
         public void Release(int typeHash, object obj)
         {
-            
         }
     }
 
@@ -209,6 +209,7 @@ namespace UnityEngine.ResourceManagement.Util
             node.Value = default(T);
             m_NodeCache.AddLast(node);
         }
+
         internal int CreatedNodeCount { get { return m_NodesCreated; } }
         internal int CachedNodeCount { get { return m_NodeCache == null ? 0 : m_NodeCache.Count; } }
     }
@@ -222,6 +223,7 @@ namespace UnityEngine.ResourceManagement.Util
                 m_globalCache = new LinkedListNodeCache<T>();
             return m_globalCache.Acquire(val);
         }
+
         public static void Release(LinkedListNode<T> node)
         {
             if (m_globalCache == null)
@@ -254,7 +256,10 @@ namespace UnityEngine.ResourceManagement.Util
 
         Type m_CachedType;
 
-        /// <inheritdoc/>
+        /// <summary>
+        /// Converts information about the serialized type to a formatted string.
+        /// </summary>
+        /// <returns>Returns information about the serialized type.</returns>
         public override string ToString()
         {
             return Value == null ? "<none>" : Value.Name;
@@ -282,8 +287,8 @@ namespace UnityEngine.ResourceManagement.Util
                 }
                 catch (Exception ex)
                 {
-                    //file not found is most likely an editor only type, we can ignore error. 
-                    if(ex.GetType() != typeof(FileNotFoundException))
+                    //file not found is most likely an editor only type, we can ignore error.
+                    if (ex.GetType() != typeof(FileNotFoundException))
                         Debug.LogException(ex);
                     return null;
                 }
@@ -338,9 +343,13 @@ namespace UnityEngine.ResourceManagement.Util
         /// String representation of the data that will be passed to the IInitializableObject.Initialize method of the created object.  This is usually a JSON string of the serialized data object.
         /// </summary>
         public string Data { get { return m_Data; } }
-#pragma warning restore 0649 
+#pragma warning restore 0649
 
-        /// <inheritdoc/>
+
+        /// <summary>
+        /// Converts information about the initialization data to a formatted string.
+        /// </summary>
+        /// <returns>Returns information about the initialization data.</returns>
         public override string ToString()
         {
             return string.Format("ObjectInitializationData: id={0}, type={1}", m_Id, m_ObjectType);
@@ -349,6 +358,7 @@ namespace UnityEngine.ResourceManagement.Util
         /// <summary>
         /// Create an instance of the defined object.  Initialize will be called on it with the id and data if it implements the IInitializableObject interface.
         /// </summary>
+        /// <typeparam name="TObject">The instance type.</typeparam>
         /// <param name="idOverride">Optional id to assign to the created object.  This only applies to objects that inherit from IInitializableObject.</param>
         /// <returns>Constructed object.  This object will already be initialized with its serialized data and id.</returns>
         public TObject CreateInstance<TObject>(string idOverride = null)
@@ -440,6 +450,7 @@ namespace UnityEngine.ResourceManagement.Util
         {
             return m_RuntimeTypes;
         }
+
 #endif
     }
 
@@ -488,6 +499,23 @@ namespace UnityEngine.ResourceManagement.Util
         }
 
         /// <summary>
+        /// Strips the query parameters of an url.
+        /// </summary>
+        /// <param name="path">The path to check.</param>
+        /// <returns>Returns the path without query parameters.</returns>
+        public static string StripQueryParameters(string path)
+        {
+            if (path != null)
+            {
+                var idx = path.IndexOf('?');
+                if (idx >= 0)
+                    return path.Substring(0, idx);
+            }
+
+            return path;
+        }
+
+        /// <summary>
         /// Check if path should use WebRequest.  A path should use WebRequest for remote paths and platforms that require WebRequest to load locally.
         /// </summary>
         /// <param name="path">The path to check.</param>
@@ -511,7 +539,7 @@ namespace UnityEngine.ResourceManagement.Util
             int length = 0;
             foreach (var asset in allAssets)
             {
-                if (asset.GetType() == elementType)
+                if (elementType.IsAssignableFrom(asset.GetType()))
                     length++;
             }
             var array = Array.CreateInstance(elementType, length);
@@ -519,7 +547,7 @@ namespace UnityEngine.ResourceManagement.Util
 
             foreach (var asset in allAssets)
             {
-                if(elementType.IsAssignableFrom(asset.GetType()))
+                if (elementType.IsAssignableFrom(asset.GetType()))
                     array.SetValue(asset, index++);
             }
 
@@ -553,7 +581,7 @@ namespace UnityEngine.ResourceManagement.Util
                 return null;
             foreach (var a in allAssets)
             {
-                if(elementType.IsAssignableFrom(a.GetType()))
+                if (elementType.IsAssignableFrom(a.GetType()))
                     list.Add(a);
             }
             return list;
@@ -586,6 +614,5 @@ namespace UnityEngine.ResourceManagement.Util
             return tB.IsAssignableFrom(tA);
 #endif
         }
-
     }
 }

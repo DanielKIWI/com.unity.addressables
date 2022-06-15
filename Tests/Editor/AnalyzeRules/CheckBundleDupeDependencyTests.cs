@@ -18,9 +18,9 @@ namespace UnityEditor.AddressableAssets.Tests.AnalyzeRules
 {
     class CheckBundleDupeDependencyTests : AddressableAssetTestBase
     {
-        const string k_CheckDupePrefabA = k_TestConfigFolder + "/checkDupe_prefabA.prefab";
-        const string k_CheckDupePrefabB = k_TestConfigFolder + "/checkDupe_prefabB.prefab";
-        const string k_CheckDupeMyMaterial = k_TestConfigFolder + "/checkDupe_myMaterial.mat";
+        string k_CheckDupePrefabA => GetAssetPath("checkDupe_prefabA.prefab");
+        string k_CheckDupePrefabB => GetAssetPath("checkDupe_prefabB.prefab");
+        string k_CheckDupeMyMaterial => GetAssetPath("checkDupe_myMaterial.mat");
 
         protected override void OnInit()
         {
@@ -53,10 +53,11 @@ namespace UnityEditor.AddressableAssets.Tests.AnalyzeRules
             runtimeData.LogResourceManagerExceptions = Settings.buildSettings.LogResourceManagerExceptions;
             var aaContext = new AddressableAssetsBuildContext
             {
-                settings = Settings,
+                Settings = Settings,
                 runtimeData = runtimeData,
                 bundleToAssetGroup = rule.m_BundleToAssetGroup,
-                locations = rule.m_Locations
+                locations = rule.m_Locations,
+                assetEntries = new List<AddressableAssetEntry>()
             };
             return aaContext;
         }
@@ -83,7 +84,7 @@ namespace UnityEditor.AddressableAssets.Tests.AnalyzeRules
             var rule = new CheckBundleDupeDependencies();
             rule.FixIssues(Settings);
 
-            Assert.AreEqual(groupCount+1, Settings.groups.Count);
+            Assert.AreEqual(groupCount + 1, Settings.groups.Count);
 
             var dupeGroup = Settings.FindGroup("Duplicate Asset Isolation");
             Assert.IsNotNull(dupeGroup);
@@ -131,7 +132,7 @@ namespace UnityEditor.AddressableAssets.Tests.AnalyzeRules
             {
                 AssetBundleBuild uniqueBundle = rule.CreateUniqueBundle(build);
                 Assert.AreEqual(string.Format("myBundleName{0}.bundle", i), uniqueBundle.assetBundleName);
-                rule.m_BundleToAssetGroup.Add(uniqueBundle.assetBundleName, assetGroup); 
+                rule.m_BundleToAssetGroup.Add(uniqueBundle.assetBundleName, assetGroup);
             }
         }
 
@@ -253,10 +254,10 @@ namespace UnityEditor.AddressableAssets.Tests.AnalyzeRules
             rule.CalculateInputDefinitions(Settings);
             rule.RefreshBuild(buildContext);
             var implicitGuids = rule.GetImplicitGuidToFilesMap();
-            
+
             //Test
             var dupeResults = rule.CalculateDuplicates(implicitGuids, buildContext).ToList();
-            
+
             //Assert
             Assert.AreEqual(2, dupeResults.Count);
 
@@ -270,7 +271,7 @@ namespace UnityEditor.AddressableAssets.Tests.AnalyzeRules
             Settings.RemoveGroup(group1);
             Settings.RemoveGroup(group2);
         }
-        
+
         [Test]
         public void DupeGroupHasContentUpdateSchema()
         {
@@ -280,18 +281,18 @@ namespace UnityEditor.AddressableAssets.Tests.AnalyzeRules
 
             Settings.CreateOrMoveEntry(AssetDatabase.AssetPathToGUID(k_CheckDupePrefabA), group1, false, false);
             Settings.CreateOrMoveEntry(AssetDatabase.AssetPathToGUID(k_CheckDupePrefabB), group2, false, false);
-            
+
             var rule = new CheckBundleDupeDependencies();
-         
+
             //Test
             rule.FixIssues(Settings);
             AddressableAssetGroup group = Settings.FindGroup("Duplicate Asset Isolation");
-            
+
             //Assert
             Assert.IsNotNull(group);
             Assert.IsTrue(group.HasSchema<ContentUpdateGroupSchema>());
             Assert.IsTrue(group.GetSchema<ContentUpdateGroupSchema>().StaticContent);
-            
+
             //Cleanup
             Settings.RemoveGroup(group);
         }
@@ -306,9 +307,9 @@ namespace UnityEditor.AddressableAssets.Tests.AnalyzeRules
 
             Settings.CreateOrMoveEntry(AssetDatabase.AssetPathToGUID(k_CheckDupePrefabA), group1, false, false);
             Settings.CreateOrMoveEntry(AssetDatabase.AssetPathToGUID(k_CheckDupePrefabB), group2, false, false);
-            
+
             var rule = new CheckBundleDupeDependencies();
-         
+
             //Test
             rule.FixIssues(Settings);
 
@@ -318,6 +319,7 @@ namespace UnityEditor.AddressableAssets.Tests.AnalyzeRules
                 ContentUpdateScript.GatherModifiedEntries(Settings, path);
             });
         }
+
 #endif
     }
 }

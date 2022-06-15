@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.IO;
 using UnityEngine.ResourceManagement;
@@ -36,7 +36,7 @@ namespace UnityEngine.AddressableAssets.Initialization
                         Directory.CreateDirectory(dir);
 
                     activeCache = Caching.GetCacheByPath(dir);
-                    if(!activeCache.valid)
+                    if (!activeCache.valid)
                         activeCache = Caching.AddCache(dir);
 
                     Caching.currentCacheForWriting = activeCache;
@@ -45,8 +45,9 @@ namespace UnityEngine.AddressableAssets.Initialization
                     activeCache.maximumAvailableStorageSpace = data.MaximumCacheSize;
                 else
                     activeCache.maximumAvailableStorageSpace = long.MaxValue;
-
+#pragma warning disable 618
                 activeCache.expirationDelay = data.ExpirationDelay;
+#pragma warning restore 618
             }
 #endif //ENABLE_CACHING
             return true;
@@ -70,11 +71,27 @@ namespace UnityEngine.AddressableAssets.Initialization
         class CacheInitOp : AsyncOperationBase<bool>, IUpdateReceiver
         {
             private Func<bool> m_Callback;
+
+#if ENABLE_CACHING
             private bool m_UpdateRequired = true;
+#endif //ENABLE_CACHING
 
             public void Init(Func<bool> callback)
             {
                 m_Callback = callback;
+            }
+
+            /// <inheritdoc />
+            protected override bool InvokeWaitForCompletion()
+            {
+#if ENABLE_CACHING
+                m_RM?.Update(Time.unscaledDeltaTime);
+                if (!IsDone)
+                    InvokeExecute();
+                return IsDone;
+#else
+                return true;
+#endif
             }
 
             public void Update(float unscaledDeltaTime)
@@ -132,13 +149,14 @@ namespace UnityEngine.AddressableAssets.Initialization
         /// <summary>
         /// Controls how long bundles are kept in the cache. This value is applied to Caching.currentCacheForWriting.expirationDelay.  The value is in seconds and has a limit of 12960000 (150 days).
         /// </summary>
+        [Obsolete("Functionality remains unchanged.  However, due to issues with Caching this property is being marked obsolete.  See Caching API documentation for more details.")]
         public int ExpirationDelay { get { return m_ExpirationDelay; } set { m_ExpirationDelay = value; } }
 
         [FormerlySerializedAs("m_limitCacheSize")]
         [SerializeField]
         bool m_LimitCacheSize;
         /// <summary>
-        /// If true, the maximum cache size will be set to MaximumCacheSize. 
+        /// If true, the maximum cache size will be set to MaximumCacheSize.
         /// </summary>
         public bool LimitCacheSize { get { return m_LimitCacheSize; } set { m_LimitCacheSize = value; } }
 

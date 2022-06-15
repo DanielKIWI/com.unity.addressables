@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using UnityEditor.Build.Pipeline;
 using UnityEditor.Build.Pipeline.Injector;
 using UnityEditor.Build.Pipeline.Interfaces;
@@ -6,7 +6,7 @@ using UnityEditor.Build.Pipeline.Interfaces;
 namespace UnityEditor.AddressableAssets.Build.BuildPipelineTasks
 {
     /// <summary>
-    /// The BuildTask used to extract write data from the build. 
+    /// The BuildTask used to extract write data from the build.
     /// </summary>
     public class ExtractDataTask : IBuildTask
     {
@@ -30,6 +30,11 @@ namespace UnityEditor.AddressableAssets.Build.BuildPipelineTasks
         /// </summary>
         public IBuildCache BuildCache { get { return m_BuildCache; } }
 
+        /// <summary>
+        /// The build context of the task.
+        /// </summary>
+        public IBuildContext BuildContext { get { return m_BuildContext; } }
+
 #pragma warning disable 649
         [InjectContext(ContextUsage.In)]
         IDependencyData m_DependencyData;
@@ -39,6 +44,9 @@ namespace UnityEditor.AddressableAssets.Build.BuildPipelineTasks
 
         [InjectContext(ContextUsage.In)]
         IBuildCache m_BuildCache;
+
+        [InjectContext(ContextUsage.In)]
+        internal IBuildContext m_BuildContext;
 #pragma warning restore 649
 
         /// <summary>

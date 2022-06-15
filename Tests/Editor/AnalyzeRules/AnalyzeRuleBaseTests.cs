@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using NUnit.Framework;
@@ -27,7 +27,7 @@ namespace UnityEditor.AddressableAssets.Tests.AnalyzeRules
             var group = Settings.CreateGroup("group1", false, false, false, null, typeof(BundledAssetGroupSchema));
 
             AddressableAssetsBuildContext context = new AddressableAssetsBuildContext();
-            context.settings = Settings;
+            context.Settings = Settings;
             context.assetGroupToBundles = new Dictionary<AddressableAssetGroup, List<string>>()
             {
                 {group, new List<string>() {bundleName}}
@@ -53,7 +53,7 @@ namespace UnityEditor.AddressableAssets.Tests.AnalyzeRules
         }
 
         [Test]
-        public void BaseAnalyzeRule_DoesNotThrowOnFix() 
+        public void BaseAnalyzeRule_DoesNotThrowOnFix()
         {
             BundleRuleBase baseRule = new BundleRuleBase();
             Assert.DoesNotThrow(() => baseRule.FixIssues(Settings));

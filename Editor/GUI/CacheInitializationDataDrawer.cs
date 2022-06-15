@@ -54,7 +54,7 @@ namespace UnityEditor.AddressableAssets.GUI
             if (!isPreview)
             {
                 var prop = property.FindPropertyRelative("m_ExpirationDelay");
-                prop.intValue = EditorGUI.IntSlider(rectForGUIRow, new GUIContent("Expiration Delay (in seconds)", "Controls how long items are left in the cache before deleting."), prop.intValue, 0, 12960000);
+                prop.intValue = EditorGUI.IntSlider(rectForGUIRow, new GUIContent("[Obsolete] Expiration Delay (in seconds)", "Controls how long items are left in the cache before deleting."), prop.intValue, 0, 12960000);
                 rectForGUIRow.y += rectForGUIRow.height + EditorGUIUtility.standardVerticalSpacing;
                 var ts = new TimeSpan(0, 0, prop.intValue);
                 EditorGUI.LabelField(new Rect(rectForGUIRow.x + 16, rectForGUIRow.y, rectForGUIRow.width - 16, rectForGUIRow.height), new GUIContent(NicifyTimeSpan(ts)));
@@ -88,7 +88,7 @@ namespace UnityEditor.AddressableAssets.GUI
             }
 
             var totalHeight = rectStartYPos + rectForGUIRow.height + EditorGUIUtility.standardVerticalSpacing;
-            if (limProp.boolValue) 
+            if (limProp.boolValue)
                 totalHeight += rectForGUIRow.height; // add extra line for rendered m_MaximumCacheSize, no extra border space b/c it's the last line
             return totalHeight;
         }
@@ -106,7 +106,7 @@ namespace UnityEditor.AddressableAssets.GUI
 
         public override float GetPropertyHeight(SerializedProperty property, GUIContent label)
         {
-            Vector2 labelSize = EditorStyles.label.CalcSize(label); 
+            Vector2 labelSize = EditorStyles.label.CalcSize(label);
             Rect rectForGUIRowWithHeight = new Rect(0, 0, 0, labelSize.y + EditorGUIUtility.standardVerticalSpacing);
             return DrawGUI(rectForGUIRowWithHeight, property, true);
         }

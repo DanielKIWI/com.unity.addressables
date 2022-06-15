@@ -1,13 +1,15 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using NUnit.Framework;
 using UnityEngine.AddressableAssets.ResourceLocators;
 using UnityEngine.ResourceManagement.ResourceLocations;
 using UnityEngine.U2D;
 using System;
+using UnityEngine.ResourceManagement.ResourceProviders;
+using UnityEngine.TestTools;
 
 namespace UnityEngine.AddressableAssets.DynamicResourceLocators
 {
-    public class DynamicLocatorTests : AddressablesTestFixture
+    public abstract class DynamicLocatorTests : AddressablesTestFixture
     {
         const string kGoKey = "go";
         const string kSpriteKey = "sprite";
@@ -32,12 +34,14 @@ namespace UnityEngine.AddressableAssets.DynamicResourceLocators
             Dictionary<KeyType, IList<IResourceLocation>> m_Locations = new Dictionary<KeyType, IList<IResourceLocation>>();
             public TestLocator()
             {
-                m_Locations.Add(new KeyType() { key = kGoKey, type = typeof(GameObject) }, new List<IResourceLocation>(new IResourceLocation[] {
+                m_Locations.Add(new KeyType() { key = kGoKey, type = typeof(GameObject) }, new List<IResourceLocation>(new IResourceLocation[]
+                {
                     new ResourceLocationBase("go1", "internalId1", "provider", typeof(GameObject)),
                     new ResourceLocationBase("go2", "internalId2", "provider", typeof(GameObject)),
                 }));
 
-                m_Locations.Add(new KeyType() { key = kSpriteKey, type = typeof(SpriteAtlas) }, new List<IResourceLocation>(new IResourceLocation[] {
+                m_Locations.Add(new KeyType() { key = kSpriteKey, type = typeof(SpriteAtlas) }, new List<IResourceLocation>(new IResourceLocation[]
+                {
                     new ResourceLocationBase("spriteAtlas1", "internalId1", "provider", typeof(SpriteAtlas)),
                     new ResourceLocationBase("spriteAtlas2", "internalId2", "provider", typeof(SpriteAtlas)),
                 }));
@@ -69,9 +73,54 @@ namespace UnityEngine.AddressableAssets.DynamicResourceLocators
         }
 
         [Test]
+        public void CreateDynamicLocations_CreatesLocationsWithResourceTypes()
+        {
+            //Setup
+            DynamicResourceLocator locator = new DynamicResourceLocator(m_Addressables);
+            List<IResourceLocation> locations = new List<IResourceLocation>();
+            IResourceLocation location = new ResourceLocationBase("test", "test", typeof(BundledAssetProvider).FullName, typeof(GameObject));
+
+            //Test
+            locator.CreateDynamicLocations(null, locations, "test", "test", location);
+
+            //Assert
+            Assert.AreEqual(typeof(GameObject), locations[0].ResourceType);
+        }
+
+        [Test]
+        public void CreateDynamicLocations_WithDepdencies_CreatesLocationsWithResourceTypes()
+        {
+            //Setup
+            DynamicResourceLocator locator = new DynamicResourceLocator(m_Addressables);
+            List<IResourceLocation> locations = new List<IResourceLocation>();
+            IResourceLocation depLocation = new ResourceLocationBase("dep1", "dep1", typeof(BundledAssetProvider).FullName, typeof(Texture2D));
+            IResourceLocation location = new ResourceLocationBase("test", "test", typeof(BundledAssetProvider).FullName, typeof(GameObject), depLocation);
+
+            //Test
+            locator.CreateDynamicLocations(null, locations, "test", "test", location);
+
+            //Assert
+            Assert.AreEqual(typeof(GameObject), locations[0].ResourceType);
+        }
+
+        [Test]
+        public void CreateDynamicLocations_WithSpriteAtlas_CreatesLocationsSpriteResourceTypes()
+        {
+            //Setup
+            DynamicResourceLocator locator = new DynamicResourceLocator(m_Addressables);
+            List<IResourceLocation> locations = new List<IResourceLocation>();
+            IResourceLocation location = new ResourceLocationBase("test", "test", typeof(BundledAssetProvider).FullName, typeof(U2D.SpriteAtlas));
+
+            //Test
+            locator.CreateDynamicLocations(typeof(Sprite), locations, "test", "test", location);
+
+            //Assert
+            Assert.AreEqual(typeof(Sprite), locations[0].ResourceType);
+        }
+
+        [Test]
         public void GetResourceLocations_WithInvalidMainKey_DoesNotReturnALocation()
         {
-
             var res = m_Addressables.GetResourceLocations("none[blah]", typeof(GameObject), out IList<IResourceLocation> locs);
             Assert.IsFalse(res);
             Assert.IsNull(locs);
@@ -80,7 +129,6 @@ namespace UnityEngine.AddressableAssets.DynamicResourceLocators
         [Test]
         public void GetResourceLocations_WithInvalidType_DoesNotReturnALocation()
         {
-
             var res = m_Addressables.GetResourceLocations($"{kGoKey}[blah]", typeof(Sprite), out IList<IResourceLocation> locs);
             Assert.IsFalse(res);
             Assert.IsNull(locs);
@@ -110,7 +158,6 @@ namespace UnityEngine.AddressableAssets.DynamicResourceLocators
             Assert.IsNull(locs);
         }
 
-
         [Test]
         public void GetResourceLocations_WithCorrectBaseTypeForSprite_ReturnsTrue()
         {
@@ -125,4 +172,14 @@ namespace UnityEngine.AddressableAssets.DynamicResourceLocators
         }
     }
 
+#if UNITY_EDITOR
+    class DynamicLocatorTests_FastMode : DynamicLocatorTests { protected override TestBuildScriptMode BuildScriptMode { get { return TestBuildScriptMode.Fast; } } }
+
+    class DynamicLocatorTests_VirtualMode : DynamicLocatorTests { protected override TestBuildScriptMode BuildScriptMode { get { return TestBuildScriptMode.Virtual; } } }
+
+    class DynamicLocatorTests_PackedPlaymodeMode : DynamicLocatorTests { protected override TestBuildScriptMode BuildScriptMode { get { return TestBuildScriptMode.PackedPlaymode; } } }
+#endif
+
+    [UnityPlatform(exclude = new[] { RuntimePlatform.WindowsEditor, RuntimePlatform.OSXEditor, RuntimePlatform.LinuxEditor })]
+    class DynamicLocatorTests_PackedMode : DynamicLocatorTests { protected override TestBuildScriptMode BuildScriptMode { get { return TestBuildScriptMode.Packed; } } }
 }

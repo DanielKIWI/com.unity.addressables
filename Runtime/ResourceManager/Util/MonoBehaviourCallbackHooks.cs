@@ -1,21 +1,28 @@
-﻿using System;
-using System.Collections;
-using System.Collections.Generic;
+using System;
 using UnityEngine;
+using UnityEngine.ResourceManagement.Util;
 
-internal class MonoBehaviourCallbackHooks : MonoBehaviour
+internal class MonoBehaviourCallbackHooks : ComponentSingleton<MonoBehaviourCallbackHooks>
 {
-    public event Action<float> OnUpdateDelegate;
-
-    void Awake()
+    internal Action<float> m_OnUpdateDelegate;
+    public event Action<float> OnUpdateDelegate
     {
-        DontDestroyOnLoad(gameObject);
+        add
+        {
+            m_OnUpdateDelegate += value;
+        }
+
+        remove
+        {
+            m_OnUpdateDelegate -= value;
+        }
     }
 
+    protected override string GetGameObjectName() => "ResourceManagerCallbacks";
+
     // Update is called once per frame
-    void Update()
+    internal void Update()
     {
-        if (OnUpdateDelegate != null)
-            OnUpdateDelegate(Time.unscaledDeltaTime);
+        m_OnUpdateDelegate?.Invoke(Time.unscaledDeltaTime);
     }
 }

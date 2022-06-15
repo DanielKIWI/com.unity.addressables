@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using NUnit.Framework;
@@ -9,6 +9,7 @@ using UnityEngine.ResourceManagement.Util;
 using UnityEngine.TestTools;
 using System.Linq;
 using UnityEngine.Networking;
+using UnityEngine.ResourceManagement.Exceptions;
 using UnityEngine.TestTools.Constraints;
 
 namespace UnityEngine.ResourceManagement.Tests
@@ -16,7 +17,7 @@ namespace UnityEngine.ResourceManagement.Tests
     public class ResourceManagerTests
     {
         Action<AsyncOperationHandle, Exception> m_PrevHandler;
-       
+
         [OneTimeSetUp]
         public void OneTimeSetup()
         {
@@ -67,6 +68,47 @@ namespace UnityEngine.ResourceManagement.Tests
             Assert.IsFalse(ur.invoked);
         }
 
+        class RMTestOp : AsyncOperationBase<object>
+        {
+            public int CompletedEventTriggeredCount = 0;
+
+            protected override void Execute()
+            {
+                m_RM.RegisterForDeferredCallback(this);
+            }
+
+            protected override bool InvokeWaitForCompletion() 
+            {
+                m_RM.Update(1);
+                return true; 
+            }
+        }
+        class RMTestUpdateReceiver : IUpdateReceiver
+        {
+            public int UpdateCount = 0;
+            public void Update(float unscaledDeltaTime)
+            {
+                UpdateCount++;
+            }
+        }
+        [Test]
+        public void Reentering_UpdateMethod_ThrowsException()
+        {
+            var op = new RMTestOp();
+            op.Completed += o =>
+            {
+                (o.m_InternalOp as RMTestOp).CompletedEventTriggeredCount++;
+                Assert.Throws<Exception>(() => o.WaitForCompletion());
+            };
+            var rec = new RMTestUpdateReceiver();
+            m_ResourceManager.AddUpdateReceiver(rec);
+            m_ResourceManager.StartOperation(op, default);
+            op.WaitForCompletion();
+            m_ResourceManager.RemoveUpdateReciever(rec);
+            Assert.AreEqual(1, op.CompletedEventTriggeredCount);
+            Assert.AreEqual(1, rec.UpdateCount);
+        }
+
         class TestUpdateReceiverThatRemovesSelfDuringUpdate : IUpdateReceiver
         {
             public ResourceManager rm;
@@ -78,6 +120,20 @@ namespace UnityEngine.ResourceManagement.Tests
                 if (removeSelf)
                     rm.RemoveUpdateReciever(this);
             }
+        }
+
+        [Test]
+        public void WhenMultipleIUpdateReceivers_AddedToResourceManager_MonoBehaviorCallbackHooksDelegateList_DoesNotGrow()
+        {
+            var prevCBHooks = m_ResourceManager.CallbackHooksEnabled;
+            m_ResourceManager.CallbackHooksEnabled = true;
+            var startingCBCount = MonoBehaviourCallbackHooks.Instance.m_OnUpdateDelegate == null ? 0 : MonoBehaviourCallbackHooks.Instance.m_OnUpdateDelegate.GetInvocationList().Length;
+            m_ResourceManager.AddUpdateReceiver(new TestUpdateReceiverThatRemovesSelfDuringUpdate() { rm = m_ResourceManager, removeSelf = true });
+            Assert.AreEqual(startingCBCount + 1, MonoBehaviourCallbackHooks.Instance.m_OnUpdateDelegate.GetInvocationList().Length);
+            m_ResourceManager.AddUpdateReceiver(new TestUpdateReceiverThatRemovesSelfDuringUpdate() { rm = m_ResourceManager, removeSelf = true });
+            Assert.AreEqual(startingCBCount + 1, MonoBehaviourCallbackHooks.Instance.m_OnUpdateDelegate.GetInvocationList().Length);
+            MonoBehaviourCallbackHooks.Instance.Update();
+            m_ResourceManager.CallbackHooksEnabled = prevCBHooks;
         }
 
         [Test]
@@ -133,22 +189,6 @@ namespace UnityEngine.ResourceManagement.Tests
             m_ResourceManager.Update(0.0f);
             Assert.AreEqual(1, provider.UpdateCount);
         }
-
-        [UnityTest]
-        public IEnumerator WhenResourceManagerCallbackHooksAreEnabled_ResourceManagerUpdatesProvidersAndCleansUp()
-        {
-            int beforeGOCount = GameObject.FindObjectsOfType<MonoBehaviourCallbackHooks>().Length;
-            MockProvider provider = new MockProvider();
-            m_ResourceManager.CallbackHooksEnabled = true;
-            m_ResourceManager.ResourceProviders.Add(provider);
-            yield return null;
-            Assert.AreEqual(1, provider.UpdateCount);
-            Assert.AreEqual(beforeGOCount+1, GameObject.FindObjectsOfType<MonoBehaviourCallbackHooks>().Length);
-            m_ResourceManager.Dispose();
-            yield return null;
-            Assert.AreEqual(beforeGOCount, GameObject.FindObjectsOfType<MonoBehaviourCallbackHooks>().Length);
-        }
-
 
         class MockInstanceProvider : IInstanceProvider
         {
@@ -229,9 +269,8 @@ namespace UnityEngine.ResourceManagement.Tests
             Assert.IsTrue(releaseCalled);
         }
 
-
         // TODO:
-        // To test: release via operation, 
+        // To test: release via operation,
         // Edge cases: game object fails to load, callback throws exception, Release called on handle before operation completes
         //
         [Test]
@@ -242,7 +281,7 @@ namespace UnityEngine.ResourceManagement.Tests
 
             MockInstanceProvider iProvider = new MockInstanceProvider();
             InstantiationParameters instantiationParameters = new InstantiationParameters(null, true);
-            AsyncOperationHandle<GameObject> []refResource = new AsyncOperationHandle<GameObject>[1];
+            AsyncOperationHandle<GameObject>[] refResource = new AsyncOperationHandle<GameObject>[1];
             iProvider.ProvideInstanceCallback = (rm, prefabHandle, iParam) =>
             {
                 refResource[0] = prefabHandle;
@@ -257,6 +296,42 @@ namespace UnityEngine.ResourceManagement.Tests
             Assert.AreEqual("instance1", obj.Result.name);
             Assert.AreEqual(1, m_ResourceManager.OperationCacheCount);
             obj.Release();
+        }
+
+        [UnityTest]
+        public IEnumerator ProvideResource_WhenRemote_ExceptionHandlerReceivesExceptionWithWebRequestError()
+        {
+            m_ResourceManager.ResourceProviders.Add(new AssetBundleProvider());
+
+            ResourceLocationBase location = new ResourceLocationBase("nonExistingResource", "http://urlThatCantPossiblyExistsaaaaaaaa.com/bundleName.bundle",
+                typeof(AssetBundleProvider).FullName, typeof(IAssetBundleResource));
+            location.Data = new AssetBundleRequestOptions()
+            {
+                BundleName = "bundleName",
+                Timeout = 0
+            };
+
+            var prevHandler = ResourceManager.ExceptionHandler;
+
+            bool exceptionWithRequestResultReceived = false;
+            ResourceManager.ExceptionHandler += (h, ex) =>
+            {
+                exceptionWithRequestResultReceived |= ex is RemoteProviderException pEx && pEx.WebRequestResult != null;
+            };
+
+            AsyncOperationHandle<IAssetBundleResource> handle;
+
+            using (new IgnoreFailingLogMessage())
+            {
+                handle = m_ResourceManager.ProvideResource<IAssetBundleResource>(location);
+                yield return handle;
+            }
+
+            ResourceManager.ExceptionHandler = prevHandler;
+            Assert.AreEqual(AsyncOperationStatus.Failed, handle.Status);
+            Assert.IsTrue(exceptionWithRequestResultReceived);
+
+            handle.Release();
         }
 
         [UnityTest]
